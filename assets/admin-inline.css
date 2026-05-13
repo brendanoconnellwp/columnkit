@@ -1,0 +1,180 @@
+/* ------------------------------------------------------------------
+ * Editable cell affordance
+ * ------------------------------------------------------------------ */
+
+.ck-cell.ck-editable {
+	cursor: pointer;
+	position: relative;
+	display: inline-block;
+	min-width: 1em;
+	min-height: 1.4em;
+	border-radius: 2px;
+	transition: background-color 80ms, box-shadow 80ms;
+	box-sizing: border-box;
+}
+
+.ck-cell.ck-editable:hover {
+	background-color: #f0f6fc;
+	box-shadow: 0 0 0 1px #2271b1 inset;
+}
+
+.ck-cell.ck-editing {
+	background-color: #fffbe6;
+	box-shadow: 0 0 0 2px #dba617 inset;
+}
+
+/* ------------------------------------------------------------------
+ * Plain cells (no nested edit-trigger button) — pencil pseudo-element
+ * ------------------------------------------------------------------ */
+
+/* Reserve space on the right so the pencil doesn't overlap text. */
+.ck-cell.ck-editable:not(.ck-has-trigger) {
+	padding: 1px 22px 1px 4px;
+}
+
+.ck-cell.ck-editable:not(.ck-has-trigger)::after {
+	content: '\270E';
+	position: absolute;
+	right: 5px;
+	top: 50%;
+	transform: translateY(-50%);
+	opacity: 0;
+	font-size: 14px;
+	line-height: 1;
+	color: #2271b1;
+	pointer-events: none;
+	transition: opacity 80ms;
+}
+
+.ck-cell.ck-editable:not(.ck-has-trigger):hover::after {
+	opacity: 0.85;
+}
+
+/* Empty cells: always show a faint pencil so the user knows the cell is editable. */
+.ck-cell.ck-editable:not(.ck-has-trigger):empty {
+	min-width: 36px;
+	min-height: 1.7em;
+	background-color: #f6f7f7;
+	box-shadow: 0 0 0 1px #c3c4c7 inset;
+}
+.ck-cell.ck-editable:not(.ck-has-trigger):empty::after {
+	opacity: 0.5;
+}
+.ck-cell.ck-editable:not(.ck-has-trigger):empty:hover {
+	background-color: #f0f6fc;
+	box-shadow: 0 0 0 1px #2271b1 inset;
+}
+.ck-cell.ck-editable:not(.ck-has-trigger):empty:hover::after {
+	opacity: 1;
+}
+
+/* ------------------------------------------------------------------
+ * Cells with an edit-trigger button (core columns like Title, Author)
+ * ------------------------------------------------------------------ */
+
+.ck-edit-trigger {
+	display: none;
+	background: transparent;
+	border: 1px solid transparent;
+	color: #2271b1;
+	cursor: pointer;
+	padding: 2px 7px;
+	margin-left: 8px;
+	font-size: 15px;
+	line-height: 1;
+	vertical-align: middle;
+	border-radius: 3px;
+	font-family: inherit;
+}
+.ck-cell.ck-editable:hover .ck-edit-trigger {
+	display: inline-block;
+}
+.ck-edit-trigger:hover,
+.ck-edit-trigger:focus {
+	background: #2271b1;
+	color: #fff;
+	outline: none;
+	border-color: #2271b1;
+}
+
+/* ------------------------------------------------------------------
+ * Popover
+ * ------------------------------------------------------------------ */
+
+.ck-edit-popover {
+	position: absolute;
+	z-index: 100050;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+	padding: 8px;
+	min-width: 240px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.ck-edit-popover .ck-input {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 6px 8px;
+	border: 1px solid #8c8f94;
+	border-radius: 3px;
+	font-size: 13px;
+	line-height: 1.4;
+}
+.ck-edit-popover .ck-input:focus {
+	border-color: #2271b1;
+	box-shadow: 0 0 0 1px #2271b1;
+	outline: none;
+}
+.ck-edit-popover-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.ck-edit-popover .ck-status {
+	flex: 1;
+	font-size: 11px;
+	color: #646970;
+	min-height: 1.2em;
+}
+.ck-edit-popover .ck-status.error   { color: #b32d2e; }
+.ck-edit-popover .ck-status.success { color: #00a32a; }
+.ck-edit-popover .ck-cancel {
+	color: #646970;
+}
+
+/* ------------------------------------------------------------------
+ * Integration badges (Yoast scores, WooCommerce stock)
+ * ------------------------------------------------------------------ */
+
+.ck-yoast-badge {
+	display: inline-block;
+	min-width: 28px;
+	text-align: center;
+	padding: 2px 6px;
+	border-radius: 10px;
+	font-weight: 600;
+	font-size: 11px;
+	color: #fff;
+}
+.ck-yoast-good { background: #00a32a; }
+.ck-yoast-ok   { background: #dba617; color: #1d2327; }
+.ck-yoast-bad  { background: #b32d2e; }
+.ck-yoast-none { background: #c3c4c7; color: #1d2327; }
+
+.ck-stock {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: 3px;
+	font-size: 11px;
+	font-weight: 600;
+}
+.ck-stock-instock     { background: #d4edda; color: #155724; }
+.ck-stock-outofstock  { background: #f8d7da; color: #721c24; }
+.ck-stock-onbackorder { background: #fff3cd; color: #856404; }
+.ck-stock-qty {
+	color: #646970;
+	font-weight: 400;
+}

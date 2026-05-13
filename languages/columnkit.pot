@@ -1,0 +1,612 @@
+# Copyright (C) 2026 Brendan
+# This file is distributed under the GPL-2.0-or-later.
+msgid ""
+msgstr ""
+"Project-Id-Version: ColumnKit 0.5.1\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/columnkit\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-05-13T00:31:52+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: columnkit\n"
+
+#. Plugin Name of the plugin
+#: columnkit.php
+msgid "ColumnKit"
+msgstr ""
+
+#. Description of the plugin
+#: columnkit.php
+msgid "Customise WordPress admin list tables — add, remove, reorder columns; filter, sort, inline edit, bulk edit, export."
+msgstr ""
+
+#. Author of the plugin
+#: columnkit.php
+msgid "Brendan"
+msgstr ""
+
+#: src/Admin/Assets.php:31
+msgid "Remove this column?"
+msgstr ""
+
+#: src/Admin/Assets.php:32
+msgid "New column"
+msgstr ""
+
+#: src/Admin/Assets.php:63
+msgid "Save"
+msgstr ""
+
+#: src/Admin/Assets.php:64
+msgid "Cancel"
+msgstr ""
+
+#: src/Admin/Assets.php:65
+msgid "Saving…"
+msgstr ""
+
+#: src/Admin/Assets.php:66
+msgid "Saved"
+msgstr ""
+
+#: src/Admin/Assets.php:67
+msgid "Save failed"
+msgstr ""
+
+#: src/Admin/Assets.php:68
+msgid "Network error"
+msgstr ""
+
+#: src/Admin/Assets.php:69
+#: src/Columns/PostMetaColumn.php:254
+msgid "— (unchanged)"
+msgstr ""
+
+#. translators: %s: meta key
+#: src/Admin/Assets.php:70
+#: src/Columns/PostMetaColumn.php:95
+#: src/Columns/PostMetaColumn.php:204
+#: src/Columns/PostMetaColumn.php:255
+#: src/Integrations/ACF/ACFFieldColumn.php:146
+msgid "Yes"
+msgstr ""
+
+#: src/Admin/Assets.php:71
+#: src/Columns/PostMetaColumn.php:95
+#: src/Columns/PostMetaColumn.php:205
+#: src/Columns/PostMetaColumn.php:256
+#: src/Integrations/ACF/ACFFieldColumn.php:146
+msgid "No"
+msgstr ""
+
+#: src/Admin/Assets.php:72
+msgid "Edit"
+msgstr ""
+
+#: src/Admin/DataExporter.php:81
+msgid "Export CSV"
+msgstr ""
+
+#: src/Admin/DataExporter.php:86
+msgid "Export JSON"
+msgstr ""
+
+#: src/Admin/DataExporter.php:93
+#: src/ListScreens/EditManager.php:91
+msgid "Invalid security token."
+msgstr ""
+
+#: src/Admin/DataExporter.php:99
+msgid "Unknown export format."
+msgstr ""
+
+#: src/Admin/DataExporter.php:103
+msgid "Unknown post type."
+msgstr ""
+
+#: src/Admin/DataExporter.php:106
+#: src/Admin/SettingsExporter.php:76
+#: src/Admin/SettingsExporter.php:112
+msgid "Permission denied."
+msgstr ""
+
+#: src/Admin/DataExporter.php:112
+msgid "No columns configured for this screen."
+msgstr ""
+
+#: src/Admin/SettingsExporter.php:51
+msgid "Import / Export Settings"
+msgstr ""
+
+#: src/Admin/SettingsExporter.php:53
+msgid "Back up the column configurations for every screen, or restore from a previous backup. JSON format."
+msgstr ""
+
+#: src/Admin/SettingsExporter.php:58
+msgid "Export Settings (JSON)"
+msgstr ""
+
+#: src/Admin/SettingsExporter.php:66
+msgid "Import Settings"
+msgstr ""
+
+#: src/Admin/SettingsExporter.php:68
+msgid "Imported screens replace existing configurations with the same key. Other screens are left untouched."
+msgstr ""
+
+#: src/Admin/SettingsExporter.php:117
+msgid "No file uploaded."
+msgstr ""
+
+#: src/Admin/SettingsExporter.php:121
+msgid "Upload failed."
+msgstr ""
+
+#: src/Admin/SettingsExporter.php:124
+msgid "File too large or empty."
+msgstr ""
+
+#: src/Admin/SettingsExporter.php:129
+msgid "Invalid upload."
+msgstr ""
+
+#: src/Admin/SettingsExporter.php:134
+msgid "Could not read file."
+msgstr ""
+
+#: src/Admin/SettingsExporter.php:139
+msgid "Invalid JSON structure."
+msgstr ""
+
+#. translators: %d: number of screens imported
+#: src/Admin/SettingsExporter.php:143
+#, php-format
+msgid "Imported %d screen."
+msgid_plural "Imported %d screens."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/Admin/SettingsPage.php:30
+#: src/Admin/SettingsPage.php:31
+#: src/Admin/SettingsPage.php:55
+msgid "Admin Columns"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:40
+msgid "You do not have permission to access this page."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:57
+msgid "Pick a list screen, then add the columns you want shown. Drag to reorder."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:62
+msgid "Settings saved."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:82
+msgid "List screen:"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:91
+msgid "Load"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:107
+msgid "Add column:"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:117
+msgid "Add"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:121
+msgid "Save Columns"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:151
+msgid "Remove column"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:158
+msgid "Label"
+msgstr ""
+
+#: src/Admin/SettingsPage.php:231
+msgid "You do not have permission to do this."
+msgstr ""
+
+#: src/Admin/SettingsPage.php:238
+msgid "Unknown screen."
+msgstr ""
+
+#: src/Columns/AuthorColumn.php:14
+msgid "Author"
+msgstr ""
+
+#: src/Columns/AuthorColumn.php:18
+msgid "Display name of the post author."
+msgstr ""
+
+#: src/Columns/AuthorColumn.php:29
+msgid "Show"
+msgstr ""
+
+#: src/Columns/AuthorColumn.php:32
+msgid "Display name"
+msgstr ""
+
+#: src/Columns/AuthorColumn.php:33
+msgid "Username"
+msgstr ""
+
+#: src/Columns/AuthorColumn.php:34
+msgid "Email"
+msgstr ""
+
+#: src/Columns/AuthorColumn.php:85
+msgid "All authors"
+msgstr ""
+
+#: src/Columns/FeaturedImageColumn.php:14
+msgid "Featured Image"
+msgstr ""
+
+#: src/Columns/FeaturedImageColumn.php:18
+msgid "Thumbnail of the post’s featured image."
+msgstr ""
+
+#: src/Columns/FeaturedImageColumn.php:30
+msgid "Image size"
+msgstr ""
+
+#: src/Columns/FeaturedImageColumn.php:78
+msgid "Featured image: any"
+msgstr ""
+
+#: src/Columns/FeaturedImageColumn.php:79
+msgid "Has image"
+msgstr ""
+
+#: src/Columns/FeaturedImageColumn.php:80
+msgid "No image"
+msgstr ""
+
+#: src/Columns/PostIdColumn.php:14
+msgid "ID"
+msgstr ""
+
+#: src/Columns/PostIdColumn.php:18
+msgid "The post or object ID."
+msgstr ""
+
+#: src/Columns/PostMetaColumn.php:14
+msgid "Custom Field"
+msgstr ""
+
+#: src/Columns/PostMetaColumn.php:18
+msgid "Show the value of a post meta key."
+msgstr ""
+
+#: src/Columns/PostMetaColumn.php:29
+msgid "Meta key"
+msgstr ""
+
+#: src/Columns/PostMetaColumn.php:35
+msgid "Value type"
+msgstr ""
+
+#: src/Columns/PostMetaColumn.php:38
+msgid "Text"
+msgstr ""
+
+#: src/Columns/PostMetaColumn.php:39
+msgid "Number"
+msgstr ""
+
+#: src/Columns/PostMetaColumn.php:40
+msgid "Date"
+msgstr ""
+
+#: src/Columns/PostMetaColumn.php:41
+msgid "Yes / No"
+msgstr ""
+
+#: src/Columns/PostMetaColumn.php:177
+msgid "meta"
+msgstr ""
+
+#. translators: %s: meta key name
+#: src/Columns/PostMetaColumn.php:187
+#, php-format
+msgid "%s ≥"
+msgstr ""
+
+#. translators: %s: meta key name
+#: src/Columns/PostMetaColumn.php:195
+#, php-format
+msgid "%s ≤"
+msgstr ""
+
+#. translators: %s: meta key
+#: src/Columns/PostMetaColumn.php:203
+#, php-format
+msgid "%s: any"
+msgstr ""
+
+#: src/Columns/TaxonomyColumn.php:14
+msgid "Taxonomy"
+msgstr ""
+
+#: src/Columns/TaxonomyColumn.php:18
+msgid "List the terms in a chosen taxonomy."
+msgstr ""
+
+#: src/Columns/TaxonomyColumn.php:29
+msgid "Taxonomy slug"
+msgstr ""
+
+#. translators: %s: taxonomy plural name
+#: src/Columns/TaxonomyColumn.php:111
+#, php-format
+msgid "All %s"
+msgstr ""
+
+#: src/Columns/TermMetaColumn.php:15
+msgid "Term Meta"
+msgstr ""
+
+#: src/Columns/TermMetaColumn.php:19
+msgid "Show the value of a term meta key."
+msgstr ""
+
+#: src/Columns/TermMetaColumn.php:28
+msgid "Term meta key"
+msgstr ""
+
+#: src/Columns/UserMetaColumn.php:17
+msgid "User Meta"
+msgstr ""
+
+#: src/Columns/UserMetaColumn.php:21
+msgid "Show the value of a user meta key."
+msgstr ""
+
+#: src/Columns/UserMetaColumn.php:30
+msgid "User meta key"
+msgstr ""
+
+#: src/Columns/UserPostCountColumn.php:16
+msgid "User Post Count"
+msgstr ""
+
+#: src/Columns/UserPostCountColumn.php:20
+msgid "Published post count authored by the user, for a chosen post type."
+msgstr ""
+
+#: src/Columns/UserPostCountColumn.php:35
+msgid "Post type"
+msgstr ""
+
+#: src/Columns/UserRoleColumn.php:15
+msgid "User Role"
+msgstr ""
+
+#: src/Columns/UserRoleColumn.php:19
+msgid "Translated display names of the user's assigned roles."
+msgstr ""
+
+#: src/Integrations/ACF/ACFFieldColumn.php:43
+#: src/Integrations/ACF/ACFFieldColumn.php:59
+msgid "ACF Field"
+msgstr ""
+
+#: src/Integrations/ACF/ACFFieldColumn.php:47
+msgid "Display a value from an Advanced Custom Fields field."
+msgstr ""
+
+#. translators: %d: rows
+#: src/Integrations/ACF/ACFFieldColumn.php:159
+#, php-format
+msgid "%d row"
+msgid_plural "%d rows"
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %d: layouts
+#: src/Integrations/ACF/ACFFieldColumn.php:163
+#, php-format
+msgid "%d layout"
+msgid_plural "%d layouts"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/Integrations/ACF/ACFFieldColumn.php:289
+msgid "ACF field"
+msgstr ""
+
+#: src/Integrations/JetEngine/JetEngineFieldColumn.php:24
+#: src/Integrations/JetEngine/JetEngineFieldColumn.php:39
+msgid "JetEngine Field"
+msgstr ""
+
+#: src/Integrations/JetEngine/JetEngineFieldColumn.php:28
+msgid "Display a value from a JetEngine meta field. Auto-discovers fields from registered meta boxes."
+msgstr ""
+
+#: src/Integrations/JetEngine/JetEngineFieldColumn.php:175
+msgid "JetEngine field"
+msgstr ""
+
+#: src/Integrations/MetaBox/MetaBoxFieldColumn.php:24
+#: src/Integrations/MetaBox/MetaBoxFieldColumn.php:39
+msgid "Meta Box Field"
+msgstr ""
+
+#: src/Integrations/MetaBox/MetaBoxFieldColumn.php:28
+msgid "Display a value from a Meta Box field. Auto-discovers fields from registered meta boxes."
+msgstr ""
+
+#: src/Integrations/MetaBox/MetaBoxFieldColumn.php:215
+msgid "Meta Box field"
+msgstr ""
+
+#: src/Integrations/WooCommerce/ProductPriceColumn.php:20
+msgid "Product Price"
+msgstr ""
+
+#: src/Integrations/WooCommerce/ProductPriceColumn.php:24
+msgid "WooCommerce product price (current — sale price if active, otherwise regular)."
+msgstr ""
+
+#: src/Integrations/WooCommerce/ProductPriceColumn.php:84
+msgid "Price ≥"
+msgstr ""
+
+#: src/Integrations/WooCommerce/ProductPriceColumn.php:90
+msgid "Price ≤"
+msgstr ""
+
+#: src/Integrations/WooCommerce/ProductSKUColumn.php:20
+msgid "Product SKU"
+msgstr ""
+
+#: src/Integrations/WooCommerce/ProductSKUColumn.php:65
+msgid "SKU contains…"
+msgstr ""
+
+#: src/Integrations/WooCommerce/ProductStockColumn.php:19
+msgid "Product Stock"
+msgstr ""
+
+#: src/Integrations/WooCommerce/ProductStockColumn.php:23
+msgid "Stock status (in / out / backorder) and quantity for WooCommerce products."
+msgstr ""
+
+#: src/Integrations/WooCommerce/ProductStockColumn.php:41
+#: src/Integrations/WooCommerce/ProductStockColumn.php:82
+msgid "In stock"
+msgstr ""
+
+#: src/Integrations/WooCommerce/ProductStockColumn.php:42
+#: src/Integrations/WooCommerce/ProductStockColumn.php:83
+msgid "Out of stock"
+msgstr ""
+
+#: src/Integrations/WooCommerce/ProductStockColumn.php:43
+#: src/Integrations/WooCommerce/ProductStockColumn.php:84
+msgid "On backorder"
+msgstr ""
+
+#: src/Integrations/WooCommerce/ProductStockColumn.php:80
+msgid "Stock: any"
+msgstr ""
+
+#: src/Integrations/Yoast/FocusKeywordColumn.php:19
+msgid "Yoast Focus Keyword"
+msgstr ""
+
+#: src/Integrations/Yoast/FocusKeywordColumn.php:23
+msgid "The focus keyword (or keyphrase) configured in Yoast SEO."
+msgstr ""
+
+#: src/Integrations/Yoast/FocusKeywordColumn.php:68
+msgid "Focus keyword contains…"
+msgstr ""
+
+#: src/Integrations/Yoast/ReadabilityColumn.php:12
+msgid "Yoast Readability"
+msgstr ""
+
+#: src/Integrations/Yoast/ReadabilityColumn.php:16
+msgid "Yoast readability score (0–100, bucketed Good/OK/Needs work)."
+msgstr ""
+
+#: src/Integrations/Yoast/SEOScoreColumn.php:12
+msgid "Yoast SEO Score"
+msgstr ""
+
+#: src/Integrations/Yoast/SEOScoreColumn.php:16
+msgid "Yoast SEO Score (0–100, bucketed Good/OK/Needs work)."
+msgstr ""
+
+#: src/Integrations/Yoast/YoastScoreColumn.php:76
+msgid "Score: any"
+msgstr ""
+
+#: src/Integrations/Yoast/YoastScoreColumn.php:78
+msgid "Good (70+)"
+msgstr ""
+
+#: src/Integrations/Yoast/YoastScoreColumn.php:79
+msgid "OK (40-69)"
+msgstr ""
+
+#: src/Integrations/Yoast/YoastScoreColumn.php:80
+msgid "Needs work (< 40)"
+msgstr ""
+
+#: src/ListScreens/EditManager.php:99
+msgid "Invalid request."
+msgstr ""
+
+#: src/ListScreens/EditManager.php:102
+msgid "You cannot edit this post."
+msgstr ""
+
+#: src/ListScreens/EditManager.php:107
+msgid "Post not found."
+msgstr ""
+
+#: src/ListScreens/EditManager.php:126
+msgid "Column not configured."
+msgstr ""
+
+#: src/ListScreens/EditManager.php:131
+msgid "Column is not editable."
+msgstr ""
+
+#: src/ListScreens/EditManager.php:241
+#: src/ListScreens/EditManager.php:294
+msgid "Unknown core field."
+msgstr ""
+
+#: src/ListScreens/EditManager.php:247
+msgid "You cannot change this field."
+msgstr ""
+
+#: src/ListScreens/EditManager.php:257
+msgid "Title cannot be empty."
+msgstr ""
+
+#: src/ListScreens/EditManager.php:268
+msgid "Invalid date."
+msgstr ""
+
+#: src/ListScreens/EditManager.php:286
+msgid "Invalid author."
+msgstr ""
+
+#. translators: %s: post type label
+#: src/Support/ScreenIdentifier.php:70
+#, php-format
+msgid "Posts — %s"
+msgstr ""
+
+#: src/Support/ScreenIdentifier.php:75
+msgid "Media library"
+msgstr ""
+
+#: src/Support/ScreenIdentifier.php:76
+msgid "Users"
+msgstr ""
+
+#. translators: %s: taxonomy plural label
+#: src/Support/ScreenIdentifier.php:81
+#, php-format
+msgid "Taxonomy — %s"
+msgstr ""

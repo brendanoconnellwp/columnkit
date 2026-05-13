@@ -1,0 +1,30 @@
+{
+  "name": "brendan/columnkit",
+  "description": "Personal WP plugin replicating Admin Columns Pro features.",
+  "type": "wordpress-plugin",
+  "license": "GPL-2.0-or-later",
+  "require": {
+    "php": ">=8.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.0",
+    "brain/monkey": "^2.6",
+    "mockery/mockery": "^1.6"
+  },
+  "autoload": {
+    "psr-4": {
+      "ColumnKit\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "ColumnKit\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit"
+  },
+  "config": {
+    "allow-plugins": {}
+  }
+}

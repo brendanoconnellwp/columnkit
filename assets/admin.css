@@ -1,0 +1,77 @@
+.ck-wrap .ck-screen-picker {
+	margin: 16px 0;
+}
+
+.ck-wrap .ck-form {
+	max-width: 720px;
+}
+
+.ck-columns {
+	margin: 16px 0;
+}
+
+.ck-column-row {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	margin-bottom: 8px;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.ck-column-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid #f0f0f1;
+	background: #f6f7f7;
+	border-top-left-radius: 4px;
+	border-top-right-radius: 4px;
+}
+
+.ck-handle {
+	cursor: move;
+	color: #646970;
+}
+
+.ck-type-label {
+	flex: 1;
+}
+
+.ck-remove {
+	color: #b32d2e !important;
+	font-size: 18px;
+	line-height: 1;
+	text-decoration: none !important;
+}
+
+.ck-column-body {
+	padding: 12px;
+}
+
+.ck-column-body p {
+	margin: 8px 0;
+}
+
+.ck-required {
+	color: #b32d2e;
+}
+
+.ck-add-row {
+	margin: 16px 0;
+	padding: 12px;
+	background: #f6f7f7;
+	border: 1px dashed #c3c4c7;
+	border-radius: 4px;
+}
+
+.ck-column-row.ui-sortable-helper {
+	opacity: 0.9;
+}
+
+.ck-placeholder {
+	border: 2px dashed #2271b1;
+	background: #f6f7f7;
+	height: 60px;
+	margin-bottom: 8px;
+}
