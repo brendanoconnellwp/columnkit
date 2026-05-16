@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (leave blank to use the version in columnkit.php)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve and verify version
+        id: ver
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          HEADER_VERSION="$(grep -oP '^\s*\*\s*Version:\s*\K[0-9][^\s]*' columnkit.php | head -n1)"
+          CONST_VERSION="$(grep -oP "define\(\s*'CK_VERSION',\s*'\K[^']+" columnkit.php | head -n1)"
+          if [ "$HEADER_VERSION" != "$CONST_VERSION" ]; then
+            echo "::error::Plugin header version ($HEADER_VERSION) and CK_VERSION ($CONST_VERSION) disagree in columnkit.php."
+            exit 1
+          fi
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          elif [ -n "${INPUT_VERSION:-}" ]; then
+            VERSION="${INPUT_VERSION#v}"
+          else
+            VERSION="$HEADER_VERSION"
+          fi
+          if [ "$VERSION" != "$HEADER_VERSION" ]; then
+            echo "::error::Requested version $VERSION does not match columnkit.php ($HEADER_VERSION). Bump the plugin version first."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$VERSION"
+
+      - name: Build plugin zip
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          STAGE="$RUNNER_TEMP/columnkit"
+          mkdir -p "$STAGE"
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.claude' \
+            --exclude='tests' \
+            --exclude='docs' \
+            --exclude='vendor' \
+            --exclude='node_modules' \
+            --exclude='coverage' \
+            --exclude='.phpunit.cache' \
+            --exclude='.phpunit.result.cache' \
+            --exclude='composer.json' \
+            --exclude='composer.lock' \
+            --exclude='phpunit.xml.dist' \
+            --exclude='.gitignore' \
+            --exclude='.gitattributes' \
+            --exclude='.editorconfig' \
+            --exclude='*.log' \
+            --exclude='.DS_Store' \
+            ./ "$STAGE/"
+          ( cd "$RUNNER_TEMP" && zip -rq "$GITHUB_WORKSPACE/columnkit-${VERSION}.zip" columnkit )
+          echo "Built columnkit-${VERSION}.zip:"
+          unzip -l "columnkit-${VERSION}.zip"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; uploading/overwriting asset."
+            gh release upload "$TAG" "columnkit-${VERSION}.zip" --clobber
+          else
+            gh release create "$TAG" \
+              "columnkit-${VERSION}.zip" \
+              --title "ColumnKit ${VERSION}" \
+              --generate-notes
+          fi
