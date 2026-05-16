@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (leave blank to use the version in columnkit.php)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -15,22 +21,37 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify tag matches plugin version
+      - name: Resolve and verify version
+        id: ver
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
           HEADER_VERSION="$(grep -oP '^\s*\*\s*Version:\s*\K[0-9][^\s]*' columnkit.php | head -n1)"
           CONST_VERSION="$(grep -oP "define\(\s*'CK_VERSION',\s*'\K[^']+" columnkit.php | head -n1)"
-          echo "tag=$VERSION header=$HEADER_VERSION const=$CONST_VERSION"
-          if [ "$VERSION" != "$HEADER_VERSION" ] || [ "$VERSION" != "$CONST_VERSION" ]; then
-            echo "::error::Tag v$VERSION does not match plugin version (header: $HEADER_VERSION, CK_VERSION: $CONST_VERSION). Bump columnkit.php before tagging."
+          if [ "$HEADER_VERSION" != "$CONST_VERSION" ]; then
+            echo "::error::Plugin header version ($HEADER_VERSION) and CK_VERSION ($CONST_VERSION) disagree in columnkit.php."
             exit 1
           fi
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          elif [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="$HEADER_VERSION"
+          fi
+          if [ "$VERSION" != "$HEADER_VERSION" ]; then
+            echo "::error::Requested version $VERSION does not match columnkit.php ($HEADER_VERSION). Bump the plugin version first."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$VERSION"
 
       - name: Build plugin zip
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
           STAGE="$RUNNER_TEMP/columnkit"
           mkdir -p "$STAGE"
           rsync -a \
@@ -60,10 +81,16 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          gh release create "$GITHUB_REF_NAME" \
-            "columnkit-${VERSION}.zip" \
-            --title "ColumnKit ${VERSION}" \
-            --generate-notes
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; uploading/overwriting asset."
+            gh release upload "$TAG" "columnkit-${VERSION}.zip" --clobber
+          else
+            gh release create "$TAG" \
+              "columnkit-${VERSION}.zip" \
+              --title "ColumnKit ${VERSION}" \
+              --generate-notes
+          fi
