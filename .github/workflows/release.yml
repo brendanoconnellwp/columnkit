@@ -23,6 +23,8 @@ jobs:
 
       - name: Resolve and verify version
         id: ver
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           HEADER_VERSION="$(grep -oP '^\s*\*\s*Version:\s*\K[0-9][^\s]*' columnkit.php | head -n1)"
@@ -33,9 +35,8 @@ jobs:
           fi
           if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
             VERSION="${GITHUB_REF_NAME#v}"
-          elif [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-            VERSION="${VERSION#v}"
+          elif [ -n "${INPUT_VERSION:-}" ]; then
+            VERSION="${INPUT_VERSION#v}"
           else
             VERSION="$HEADER_VERSION"
           fi
