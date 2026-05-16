@@ -86,9 +86,13 @@ final class Assets {
 		if ( $data === [] ) {
 			return;
 		}
+		// JSON_HEX_* escapes <, >, &, ', " so a post title containing "</script>" (or any
+		// other markup) cannot break out of this inline <script> block. Without these flags
+		// wp_json_encode() leaves "<" untouched and any author-controlled title becomes
+		// stored XSS in wp-admin.
 		printf(
 			"<script>window.CK_INLINE=window.CK_INLINE||{};CK_INLINE.coreData=%s;</script>\n",
-			wp_json_encode( $data )
+			wp_json_encode( $data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT )
 		);
 	}
 }

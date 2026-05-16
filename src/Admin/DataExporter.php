@@ -158,17 +158,34 @@ final class DataExporter {
 		};
 		add_action( 'pre_get_posts', $apply );
 
+		// Mirror the admin list table's access scoping. Without this a low-privileged user
+		// (e.g. a Contributor, who has edit_posts) could pass ?post_status=draft&author=N to
+		// the export and exfiltrate other users' unpublished posts + every configured column,
+		// since WP_Query does NOT author-restrict protected statuses unless perm=editable and
+		// the export builds its own query outside edit.php's scoping.
+		$can_edit_others = current_user_can( $pt_obj->cap->edit_others_posts );
+
 		$base_args = [
 			'post_type'      => $post_type,
 			'posts_per_page' => -1,
 			'no_found_rows'  => true,
 			'post_status'    => 'any',
+			'perm'           => 'editable',
 		];
-		// Pass through standard list-table GET vars that scope results.
-		foreach ( [ 'author', 'm', 'cat', 'tag', 'post_status', 's' ] as $key ) {
+
+		// Users who can't edit others' posts must not be able to widen the result set via
+		// author/post_status — those GET vars are only honoured for users who already see
+		// everything in the list table.
+		$passthrough = $can_edit_others
+			? [ 'author', 'm', 'cat', 'tag', 'post_status', 's' ]
+			: [ 'm', 'cat', 'tag', 's' ];
+		foreach ( $passthrough as $key ) {
 			if ( isset( $_GET[ $key ] ) && is_scalar( $_GET[ $key ] ) ) {
 				$base_args[ $key ] = sanitize_text_field( wp_unslash( (string) $_GET[ $key ] ) );
 			}
+		}
+		if ( ! $can_edit_others ) {
+			$base_args['author'] = get_current_user_id();
 		}
 		$query->query( $base_args );
 
