@@ -278,6 +278,21 @@ final class PostMetaColumn extends BaseColumn implements SortableColumn, Filtera
 		if ( $key === '' ) {
 			return;
 		}
+		// Protected meta (keys starting with "_", or any key WP/plugins flag protected) is
+		// editable here only by users trusted to manage other people's content. Without this,
+		// a user who merely has edit_post on a row (Author/Contributor on their own posts)
+		// could tamper with internal meta — _wp_page_template, _thumbnail_id, another
+		// plugin's access-control meta — just because an admin configured a column on that
+		// key. Editors/Admins keep the feature; this mirrors the elevated-cap gate already
+		// applied to the core "author" inline field in EditManager.
+		if ( is_protected_meta( $key, 'post' ) ) {
+			$post_type   = get_post_type( $post_id );
+			$pt_obj      = $post_type ? get_post_type_object( $post_type ) : null;
+			$trusted_cap = $pt_obj->cap->edit_others_posts ?? 'edit_others_posts';
+			if ( ! current_user_can( $trusted_cap ) ) {
+				return;
+			}
+		}
 		$type = (string) ( $settings['value_type'] ?? 'string' );
 
 		// Normalise per declared value_type.
