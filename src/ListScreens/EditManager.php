@@ -6,6 +6,7 @@ namespace ColumnKit\ListScreens;
 use ColumnKit\ColumnRegistry;
 use ColumnKit\Columns\EditableColumn;
 use ColumnKit\Settings\SettingsRepository;
+use ColumnKit\Support\Editability;
 use ColumnKit\Support\ScreenIdentifier;
 use WP_Post;
 
@@ -126,11 +127,11 @@ final class EditManager {
 			wp_send_json_error( [ 'message' => __( 'Column not configured.', 'columnkit' ) ], 404 );
 		}
 
-		$col = $this->registry->get( (string) ( $entry['type'] ?? '' ) );
-		if ( ! $col instanceof EditableColumn ) {
+		$col      = $this->registry->get( (string) ( $entry['type'] ?? '' ) );
+		$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
+		if ( ! $col instanceof EditableColumn || ! Editability::is_editable( $col, $settings ) ) {
 			wp_send_json_error( [ 'message' => __( 'Column is not editable.', 'columnkit' ) ], 400 );
 		}
-		$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
 
 		$col->save_value( $post_id, $value, $settings );
 
@@ -376,7 +377,11 @@ final class EditManager {
 		$out = [];
 		foreach ( $this->active_columns as $entry ) {
 			$col = $this->registry->get( (string) ( $entry['type'] ?? '' ) );
-			if ( $col instanceof EditableColumn ) {
+			if ( ! $col instanceof EditableColumn ) {
+				continue;
+			}
+			$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
+			if ( Editability::is_editable( $col, $settings ) ) {
 				$out[] = $entry;
 			}
 		}
