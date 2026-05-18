@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       ColumnKit
  * Description:       Customise WordPress admin list tables — add, remove, reorder columns; filter, sort, inline edit, bulk edit, export.
- * Version:           0.5.1
+ * Version:           0.5.2
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Author:            Brendan
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'CK_VERSION', '0.5.1' );
+define( 'CK_VERSION', '0.5.2' );
 define( 'CK_FILE', __FILE__ );
 define( 'CK_DIR', plugin_dir_path( __FILE__ ) );
 define( 'CK_URL', plugin_dir_url( __FILE__ ) );
