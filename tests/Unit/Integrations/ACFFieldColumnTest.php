@@ -121,6 +121,17 @@ final class ACFFieldColumnTest extends TestCase {
 		$this->col->save_value( 5, 'bogus', [ 'field_name' => 'status' ] );
 	}
 
+	public function test_true_false_false_renders_no_not_blank(): void {
+		// ACF formats true_false to a bool — a stored "No" arrives as false.
+		Functions\when( 'get_field_object' )->justReturn( [ 'type' => 'true_false', 'value' => false ] );
+		$this->assertSame( 'No', $this->col->render( 1, [ 'field_name' => 'is_featured' ] ) );
+	}
+
+	public function test_true_false_true_renders_yes(): void {
+		Functions\when( 'get_field_object' )->justReturn( [ 'type' => 'true_false', 'value' => true ] );
+		$this->assertSame( 'Yes', $this->col->render( 1, [ 'field_name' => 'is_featured' ] ) );
+	}
+
 	public function test_save_complex_field_never_writes(): void {
 		Functions\when( 'is_protected_meta' )->justReturn( false );
 		Functions\expect( 'update_field' )->never();

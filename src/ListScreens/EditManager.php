@@ -359,14 +359,20 @@ final class EditManager {
 		}
 		$out = [];
 		foreach ( $wp_query->posts as $p ) {
-			if ( ! $p instanceof WP_Post ) {
+			// Hierarchical list tables (Pages, hierarchical CPTs) populate $wp_query->posts
+			// with lightweight `id=>parent` stdClass stubs / IDs, NOT WP_Post objects. Resolve
+			// each to a real post via get_post() (the list table has primed the post cache, so
+			// this is a cache hit) — otherwise core Title/Date/Author inline edit silently
+			// no-ops on every hierarchical screen.
+			$post = $p instanceof WP_Post ? $p : get_post( is_object( $p ) ? (int) ( $p->ID ?? 0 ) : (int) $p );
+			if ( ! $post instanceof WP_Post ) {
 				continue;
 			}
-			$ts = strtotime( $p->post_date );
-			$out[ (int) $p->ID ] = [
-				'title'  => (string) $p->post_title,
+			$ts = strtotime( $post->post_date );
+			$out[ (int) $post->ID ] = [
+				'title'  => (string) $post->post_title,
 				'date'   => $ts ? gmdate( 'Y-m-d', $ts ) : '',
-				'author' => (string) $p->post_author,
+				'author' => (string) $post->post_author,
 			];
 		}
 		return $out;

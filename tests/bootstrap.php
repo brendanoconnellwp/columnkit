@@ -44,3 +44,15 @@ spl_autoload_register( static function ( string $class ): void {
 		}
 	}
 } );
+
+// Minimal global WP_Post stand-in for unit tests that exercise code type-hinting/branching on
+// it (e.g. EditManager::collect_core_data). Real WP isn't loaded in the unit suite.
+if ( ! class_exists( 'WP_Post' ) ) {
+	#[\AllowDynamicProperties]
+	class WP_Post {
+		public int $ID = 0;
+		public string $post_title = '';
+		public string $post_date = '';
+		public string $post_author = '';
+	}
+}
