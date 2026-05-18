@@ -4,7 +4,7 @@ Tags: admin columns, custom fields, list table
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.1.0
+Stable tag: 0.5.3
 License: GPLv2 or later
 
 Customise WordPress admin list tables: add, remove, reorder columns; filter, sort, inline-edit, bulk-edit, and export them.
@@ -14,6 +14,16 @@ Customise WordPress admin list tables: add, remove, reorder columns; filter, sor
 Personal plugin for replacing paid SaaS column-management plugins. v0.1 ships Phase 1 (custom columns + admin UI on Posts and Pages). Later phases add sorting/filtering, inline & bulk edit, export, and integrations with ACF, WooCommerce, and Yoast.
 
 == Changelog ==
+
+= 0.5.3 =
+* Fixed: core Title/Date/Author inline edit silently no-op'd on hierarchical list tables (Pages and hierarchical CPTs) because per-row data was skipped for non-WP_Post query rows.
+* Fixed: an ACF true/false field storing "No" rendered as a blank cell instead of "No".
+
+= 0.5.2 =
+* Added: inline & bulk edit for ACF, JetEngine, and Meta Box field columns (safe scalar field types — true/false, text, number, single select/radio, plain dates); complex/array/multi-value/clone fields remain read-only.
+
+= 0.5.1 =
+* Initial release: add/reorder columns on Posts/Pages/CPTs/Media/Users/Taxonomies; sort, filter, click-to-edit popover, bulk edit, CSV/JSON export; settings import/export; ACF/Meta Box/JetEngine/WooCommerce/Yoast integrations.
 
 = 0.1.0 =
 * Phase 1 foundation: column registry, settings page, post-ID / post-meta / taxonomy / featured-image / author columns on Posts and Pages list tables.
