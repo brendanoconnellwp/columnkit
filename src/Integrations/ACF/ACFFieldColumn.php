@@ -143,6 +143,12 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 
 	/** @param mixed $value */
 	private function render_value( $value, string $type, array $field ): string {
+		// true_false must be resolved BEFORE the generic emptiness guard: ACF formats it to a
+		// bool, so a stored "No" is `false` and would otherwise blank out instead of showing "No".
+		if ( $type === 'true_false' ) {
+			return esc_html( $value ? __( 'Yes', 'columnkit' ) : __( 'No', 'columnkit' ) );
+		}
+
 		if ( $value === null || $value === '' || $value === false ) {
 			return '';
 		}
@@ -169,9 +175,6 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 
 			case 'checkbox':
 				return esc_html( implode( ', ', array_map( 'strval', (array) $value ) ) );
-
-			case 'true_false':
-				return esc_html( $value ? __( 'Yes', 'columnkit' ) : __( 'No', 'columnkit' ) );
 
 			case 'date_picker':
 			case 'date_time_picker':
