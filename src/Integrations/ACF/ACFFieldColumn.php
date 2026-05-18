@@ -4,6 +4,7 @@ declare( strict_types=1 );
 namespace ColumnKit\Integrations\ACF;
 
 use ColumnKit\Columns\BaseColumn;
+use ColumnKit\Columns\ConditionallyEditableColumn;
 use ColumnKit\Columns\FilterableColumn;
 use ColumnKit\Columns\SortableColumn;
 use WP_Query;
@@ -12,9 +13,15 @@ use WP_Term;
 /**
  * Generic ACF field column — pick a field via dropdown, render type-aware.
  *
- * Read-only display + sort + filter. Editing of ACF fields is intentionally NOT supported here
- * (defer to ACF's own admin UIs which already handle type-specific inputs correctly — see
- * project memory feedback_scope_custom_fields).
+ * Display + sort + filter, plus inline/bulk edit for field types that round-trip cleanly through
+ * a single-input popover: true_false, text, email, url, password, number, range, date_picker, and
+ * single-value select/radio/button_group. Complex types (image, gallery, relationship,
+ * post_object, repeater, flexible_content, taxonomy, user, file, clone, multi-selects …) stay
+ * read-only — editing them belongs in ACF's own field UI. supports_inline_edit() is the gate.
+ *
+ * Writes go through ACF's update_field() (by field key when known) so ACF's `_fieldname`
+ * field-key reference is maintained — a plain update_post_meta() would leave ACF unable to
+ * resolve the field for posts that never had it saved.
  *
  * Renderer dispatches by ACF field 'type' returned from get_field_object():
  *   image          → thumbnail (40x40)
@@ -34,7 +41,28 @@ use WP_Term;
  *   wysiwyg / textarea → first 100 chars plain text
  *   text and unknown → string
  */
-final class ACFFieldColumn extends BaseColumn implements SortableColumn, FilterableColumn {
+final class ACFFieldColumn extends BaseColumn implements SortableColumn, FilterableColumn, ConditionallyEditableColumn {
+	/**
+	 * ACF field type => our popover input type. Anything not listed here is read-only.
+	 * 'select' covers select/radio/button_group (single-value only — see supports_inline_edit).
+	 */
+	private const EDITABLE_TYPES = [
+		'true_false'   => 'boolean',
+		'text'         => 'text',
+		'email'        => 'text',
+		'url'          => 'text',
+		'password'     => 'text',
+		'number'       => 'number',
+		'range'        => 'number',
+		'date_picker'  => 'date',
+		'select'       => 'select',
+		'radio'        => 'select',
+		'button_group' => 'select',
+	];
+
+	/** Per-request cache: field_name => field definition array|null (avoids re-scanning groups per row). */
+	private array $field_cache = [];
+
 	public function get_type(): string {
 		return 'acf_field';
 	}
@@ -245,6 +273,254 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 			return (string) wp_json_encode( $value );
 		}
 		return (string) $value;
+	}
+
+	// ------------------------------------------------------------------
+	// ConditionallyEditableColumn + EditableColumn
+	// ------------------------------------------------------------------
+
+	public function supports_inline_edit( array $settings ): bool {
+		$field = $this->resolve_field( (string) ( $settings['field_name'] ?? '' ) );
+		if ( $field === null ) {
+			return false;
+		}
+		$type = (string) ( $field['type'] ?? '' );
+		if ( ! isset( self::EDITABLE_TYPES[ $type ] ) ) {
+			return false;
+		}
+		// Multi-value selects/radios return arrays — a single popover input can't represent them.
+		if ( ( $type === 'select' || $type === 'radio' ) && ! empty( $field['multiple'] ) ) {
+			return false;
+		}
+		return true;
+	}
+
+	public function get_edit_input_type( array $settings ): string {
+		$field = $this->resolve_field( (string) ( $settings['field_name'] ?? '' ) );
+		$type  = $field !== null ? (string) ( $field['type'] ?? '' ) : '';
+		return self::EDITABLE_TYPES[ $type ] ?? 'text';
+	}
+
+	public function get_edit_options( array $settings ): ?array {
+		$field = $this->resolve_field( (string) ( $settings['field_name'] ?? '' ) );
+		if ( $field === null ) {
+			return null;
+		}
+		$type = (string) ( $field['type'] ?? '' );
+		if ( ! in_array( $type, [ 'select', 'radio', 'button_group' ], true ) ) {
+			return null;
+		}
+		$choices = is_array( $field['choices'] ?? null ) ? $field['choices'] : [];
+		$out     = [];
+		// allow_null fields can be cleared; offer an explicit empty choice.
+		if ( ! empty( $field['allow_null'] ) ) {
+			$out[''] = __( '— (none)', 'columnkit' );
+		}
+		foreach ( $choices as $value => $label ) {
+			$out[ (string) $value ] = (string) $label;
+		}
+		return $out !== [] ? $out : null;
+	}
+
+	public function get_raw_value( int $object_id, array $settings ): string {
+		$name = (string) ( $settings['field_name'] ?? '' );
+		if ( $name === '' || ! function_exists( 'get_field' ) ) {
+			return '';
+		}
+		// Unformatted value (3rd arg false): true_false → '1'/'0'/'', date_picker → stored Ymd.
+		$val = get_field( $name, $object_id, false );
+		if ( $val === null || $val === false || is_array( $val ) || is_object( $val ) ) {
+			return '';
+		}
+		$val   = (string) $val;
+		$field = $this->resolve_field( $name );
+		if ( $val !== '' && $field !== null && ( $field['type'] ?? '' ) === 'date_picker' ) {
+			$val = $this->acf_date_to_iso( $val );
+		}
+		return $val;
+	}
+
+	public function render_bulk_edit_field( string $input_name, array $settings ): void {
+		$input   = $this->get_edit_input_type( $settings );
+		$options = $this->get_edit_options( $settings );
+
+		if ( $input === 'boolean' ) {
+			echo '<select name="' . esc_attr( $input_name ) . '" class="ck-edit-input">';
+			printf( '<option value="">%s</option>', esc_html__( '— (unchanged)', 'columnkit' ) );
+			printf( '<option value="1">%s</option>', esc_html__( 'Yes', 'columnkit' ) );
+			printf( '<option value="0">%s</option>', esc_html__( 'No', 'columnkit' ) );
+			echo '</select>';
+			return;
+		}
+
+		if ( $input === 'select' && is_array( $options ) ) {
+			echo '<select name="' . esc_attr( $input_name ) . '" class="ck-edit-input">';
+			printf( '<option value="">%s</option>', esc_html__( '— (unchanged)', 'columnkit' ) );
+			foreach ( $options as $value => $label ) {
+				printf( '<option value="%s">%s</option>', esc_attr( (string) $value ), esc_html( (string) $label ) );
+			}
+			echo '</select>';
+			return;
+		}
+
+		$html_input = match ( $input ) {
+			'number' => 'number',
+			'date'   => 'date',
+			default  => 'text',
+		};
+		$extra = $html_input === 'number' ? ' step="any"' : '';
+		printf(
+			'<input type="%1$s"%2$s name="%3$s" value="" class="ck-edit-input" />',
+			esc_attr( $html_input ),
+			$extra, // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- literal.
+			esc_attr( $input_name )
+		);
+	}
+
+	public function save_value( int $post_id, string $raw_value, array $settings ): void {
+		$name = (string) ( $settings['field_name'] ?? '' );
+		if ( $name === '' || ! $this->supports_inline_edit( $settings ) ) {
+			return;
+		}
+		$field = $this->resolve_field( $name );
+		if ( $field === null ) {
+			return;
+		}
+
+		// Capability parity with PostMetaColumn: ACF's `_fieldname` reference (and rare
+		// underscore-prefixed field names) is protected meta. Only users trusted with other
+		// people's content may edit protected keys, even if an admin configured the column.
+		if ( is_protected_meta( $name, 'post' ) ) {
+			$post_type   = get_post_type( $post_id );
+			$pt_obj      = $post_type ? get_post_type_object( $post_type ) : null;
+			$trusted_cap = $pt_obj->cap->edit_others_posts ?? 'edit_others_posts';
+			if ( ! current_user_can( $trusted_cap ) ) {
+				return;
+			}
+		}
+
+		$type = (string) ( $field['type'] ?? '' );
+
+		/** @var int|float|string $value_to_store */
+		$value_to_store = $raw_value;
+
+		switch ( self::EDITABLE_TYPES[ $type ] ) {
+			case 'boolean':
+				if ( $raw_value === '' ) {
+					return; // '' = unchanged.
+				}
+				$value_to_store = in_array( strtolower( $raw_value ), [ '1', 'true', 'yes', 'on' ], true ) ? 1 : 0;
+				break;
+
+			case 'number':
+				if ( $raw_value === '' ) {
+					$value_to_store = '';
+					break; // Clearing is allowed.
+				}
+				if ( ! is_numeric( $raw_value ) ) {
+					return; // Reject non-numeric.
+				}
+				$value_to_store = $raw_value + 0;
+				break;
+
+			case 'date':
+				if ( $raw_value === '' ) {
+					$value_to_store = '';
+					break;
+				}
+				$ts = strtotime( $raw_value );
+				if ( $ts === false ) {
+					return;
+				}
+				// ACF date_picker stores Ymd regardless of display/return format.
+				$value_to_store = gmdate( 'Ymd', $ts );
+				break;
+
+			case 'select':
+				if ( $raw_value === '' ) {
+					if ( empty( $field['allow_null'] ) ) {
+						return; // Not nullable — ignore empty rather than blank a required field.
+					}
+					$value_to_store = '';
+					break;
+				}
+				$choices = is_array( $field['choices'] ?? null )
+					? array_map( 'strval', array_keys( $field['choices'] ) )
+					: [];
+				if ( $choices !== [] && ! in_array( $raw_value, $choices, true ) ) {
+					return; // Reject values outside the field's defined choices.
+				}
+				$value_to_store = $raw_value;
+				break;
+
+			case 'text':
+			default:
+				$value_to_store = $raw_value;
+				break;
+		}
+
+		if ( function_exists( 'update_field' ) ) {
+			$key = (string) ( $field['key'] ?? '' );
+			update_field( $key !== '' ? $key : $name, $value_to_store, $post_id );
+			return;
+		}
+		update_post_meta( $post_id, $name, $value_to_store );
+	}
+
+	/**
+	 * Resolve an ACF field definition by name WITHOUT a post context (settings-time calls have
+	 * none). acf_get_field() is the canonical resolver and is itself cached by ACF; the
+	 * field-group scan is a fallback for older ACF. Result memoised per request.
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	private function resolve_field( string $name ): ?array {
+		if ( $name === '' ) {
+			return null;
+		}
+		if ( array_key_exists( $name, $this->field_cache ) ) {
+			return $this->field_cache[ $name ];
+		}
+
+		$found = null;
+		if ( function_exists( 'acf_get_field' ) ) {
+			$f = acf_get_field( $name );
+			if ( is_array( $f ) ) {
+				$found = $f;
+			}
+		}
+		if ( $found === null && function_exists( 'acf_get_field_groups' ) && function_exists( 'acf_get_fields' ) ) {
+			foreach ( acf_get_field_groups() as $group ) {
+				$fields = acf_get_fields( $group );
+				if ( ! is_array( $fields ) ) {
+					continue;
+				}
+				foreach ( $fields as $field ) {
+					if ( is_array( $field ) && ( $field['name'] ?? '' ) === $name ) {
+						$found = $field;
+						break 2;
+					}
+				}
+			}
+		}
+
+		$this->field_cache[ $name ] = $found;
+		return $found;
+	}
+
+	/** Stored ACF date (Ymd, or already Y-m-d / strtotime-able) → Y-m-d for <input type=date>. */
+	private function acf_date_to_iso( string $stored ): string {
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $stored ) === 1 ) {
+			return $stored;
+		}
+		if ( preg_match( '/^\d{8}$/', $stored ) === 1 ) {
+			$d = \DateTimeImmutable::createFromFormat( 'Ymd', $stored );
+			if ( $d instanceof \DateTimeImmutable ) {
+				return $d->format( 'Y-m-d' );
+			}
+		}
+		$ts = strtotime( $stored );
+		return $ts !== false ? gmdate( 'Y-m-d', $ts ) : $stored;
 	}
 
 	// ------------------------------------------------------------------

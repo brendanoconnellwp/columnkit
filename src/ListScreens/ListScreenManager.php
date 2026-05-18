@@ -7,6 +7,7 @@ use ColumnKit\Admin\DataExporter;
 use ColumnKit\ColumnRegistry;
 use ColumnKit\Columns\EditableColumn;
 use ColumnKit\Settings\SettingsRepository;
+use ColumnKit\Support\Editability;
 use ColumnKit\Support\ScreenIdentifier;
 
 /**
@@ -151,7 +152,7 @@ final class ListScreenManager {
 			$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
 			$html     = $col->render( $post_id, $settings );
 
-			if ( $col instanceof EditableColumn ) {
+			if ( $col instanceof EditableColumn && Editability::is_editable( $col, $settings ) ) {
 				$raw         = $col->get_raw_value( $post_id, $settings );
 				$input_type  = $col->get_edit_input_type( $settings );
 				$options     = $col->get_edit_options( $settings );
