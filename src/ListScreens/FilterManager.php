@@ -100,7 +100,7 @@ final class FilterManager {
 		$out = [];
 		foreach ( $keys as $suffix ) {
 			$param = self::PARAM_PREFIX . $col_id . ( $suffix === '' ? '' : '__' . $suffix );
-			$raw   = isset( $_GET[ $param ] ) ? wp_unslash( (string) $_GET[ $param ] ) : '';
+			$raw   = isset( $_GET[ $param ] ) && is_scalar( $_GET[ $param ] ) ? wp_unslash( (string) $_GET[ $param ] ) : '';
 			$out[ $suffix ] = sanitize_text_field( $raw );
 		}
 		return $out;

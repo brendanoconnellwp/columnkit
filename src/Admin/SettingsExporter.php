@@ -114,35 +114,31 @@ final class SettingsExporter {
 		check_admin_referer( self::NONCE_IMPORT );
 
 		if ( empty( $_FILES['ck_settings_file'] ) || ! is_array( $_FILES['ck_settings_file'] ) ) {
-			$this->redirect_with_message( 'error', __( 'No file uploaded.', 'columnkit' ) );
+			$this->redirect_with_code( 'no_file' );
 		}
 		$file = $_FILES['ck_settings_file'];
 		if ( ( $file['error'] ?? UPLOAD_ERR_NO_FILE ) !== UPLOAD_ERR_OK ) {
-			$this->redirect_with_message( 'error', __( 'Upload failed.', 'columnkit' ) );
+			$this->redirect_with_code( 'upload_failed' );
 		}
 		if ( (int) ( $file['size'] ?? 0 ) <= 0 || (int) $file['size'] > self::MAX_IMPORT_BYTES ) {
-			$this->redirect_with_message( 'error', __( 'File too large or empty.', 'columnkit' ) );
+			$this->redirect_with_code( 'file_invalid' );
 		}
 
 		$tmp = (string) ( $file['tmp_name'] ?? '' );
 		if ( $tmp === '' || ! is_uploaded_file( $tmp ) ) {
-			$this->redirect_with_message( 'error', __( 'Invalid upload.', 'columnkit' ) );
+			$this->redirect_with_code( 'invalid_upload' );
 		}
 
 		$contents = file_get_contents( $tmp );
 		if ( $contents === false || $contents === '' ) {
-			$this->redirect_with_message( 'error', __( 'Could not read file.', 'columnkit' ) );
+			$this->redirect_with_code( 'unreadable' );
 		}
 
 		$imported = $this->import_from_json( $contents );
 		if ( $imported < 0 ) {
-			$this->redirect_with_message( 'error', __( 'Invalid JSON structure.', 'columnkit' ) );
+			$this->redirect_with_code( 'invalid_json' );
 		}
-		$this->redirect_with_message( 'success', sprintf(
-			/* translators: %d: number of screens imported */
-			_n( 'Imported %d screen.', 'Imported %d screens.', $imported, 'columnkit' ),
-			$imported
-		) );
+		$this->redirect_with_code( 'imported', $imported );
 	}
 
 	/**
@@ -168,22 +164,26 @@ final class SettingsExporter {
 			if ( ! is_array( $screen_data ) || ! isset( $screen_data['columns'] ) || ! is_array( $screen_data['columns'] ) ) {
 				continue;
 			}
-			$clean = $sanitizer->sanitize_columns( $screen_data['columns'] );
+			$clean = $sanitizer->sanitize_columns( $screen_data['columns'], $screen_key );
 			$this->repository->save( $screen_key, $clean );
 			$imported++;
 		}
 		return $imported;
 	}
 
-	private function redirect_with_message( string $level, string $message ): void {
-		$redirect = add_query_arg(
-			[
-				'page'        => 'columnkit',
-				'ck_message' => rawurlencode( $message ),
-				'ck_level'   => $level,
-			],
-			admin_url( 'options-general.php' )
-		);
+	/**
+	 * Redirect back to the settings page carrying only a whitelisted message code (plus an
+	 * optional count). SettingsPage maps the code to display text — no free-text via the URL.
+	 */
+	private function redirect_with_code( string $code, int $count = 0 ): void {
+		$args = [
+			'page'   => 'columnkit',
+			'ck_msg' => $code,
+		];
+		if ( $count > 0 ) {
+			$args['ck_count'] = $count;
+		}
+		$redirect = add_query_arg( $args, admin_url( 'options-general.php' ) );
 		wp_safe_redirect( $redirect );
 		exit;
 	}
