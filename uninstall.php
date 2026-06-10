@@ -9,11 +9,11 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 global $wpdb;
 
-// ColumnKit stores everything under the ck_ prefix (ck_version, ck_screen_*). The previous
-// 'bac_%' pattern matched none of it, leaving every per-screen column configuration behind
-// after uninstall.
-$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'ck\\_%'" );
+// ColumnKit stores exactly two option shapes: ck_version and ck_screen_<key>. Match those
+// precisely — a broad 'ck_%' sweep could destroy options belonging to OTHER plugins that
+// happen to share the ck_ prefix.
+$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name = 'ck_version' OR option_name LIKE 'ck\\_screen\\_%'" );
 
 if ( is_multisite() ) {
-	$wpdb->query( "DELETE FROM {$wpdb->sitemeta} WHERE meta_key LIKE 'ck\\_%'" );
+	$wpdb->query( "DELETE FROM {$wpdb->sitemeta} WHERE meta_key = 'ck_version' OR meta_key LIKE 'ck\\_screen\\_%'" );
 }

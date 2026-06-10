@@ -92,9 +92,9 @@ final class EditManager {
 			wp_send_json_error( [ 'message' => __( 'Invalid security token.', 'columnkit' ) ], 403 );
 		}
 
-		$post_id = isset( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0;
-		$col_id  = isset( $_POST['col_id'] ) ? sanitize_key( wp_unslash( (string) $_POST['col_id'] ) ) : '';
-		$value   = isset( $_POST['value'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['value'] ) ) : '';
+		$post_id = isset( $_POST['post_id'] ) && is_scalar( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0;
+		$col_id  = isset( $_POST['col_id'] ) && is_string( $_POST['col_id'] ) ? sanitize_key( wp_unslash( $_POST['col_id'] ) ) : '';
+		$value   = isset( $_POST['value'] ) && is_scalar( $_POST['value'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['value'] ) ) : '';
 
 		if ( $post_id <= 0 || $col_id === '' ) {
 			wp_send_json_error( [ 'message' => __( 'Invalid request.', 'columnkit' ) ], 400 );
@@ -201,7 +201,7 @@ final class EditManager {
 			return;
 		}
 
-		$nonce = isset( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['_wpnonce'] ) ) : '';
+		$nonce = isset( $_POST['_wpnonce'] ) && is_string( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
 		if ( ! wp_verify_nonce( $nonce, 'bulk-posts' ) ) {
 			return;
 		}
@@ -243,9 +243,15 @@ final class EditManager {
 		}
 		$spec = self::CORE_FIELDS[ $field ];
 
-		// Per-field additional capability (e.g. author edits need edit_others_posts).
-		if ( $spec['cap'] !== null && ! current_user_can( $spec['cap'] ) ) {
-			wp_send_json_error( [ 'message' => __( 'You cannot change this field.', 'columnkit' ) ], 403 );
+		// Per-field additional capability (e.g. author edits need edit_others_posts). Resolve
+		// through the post type's capability map so CPTs registered with a custom
+		// capability_type are gated by THEIR mapped cap, not the generic posts one.
+		if ( $spec['cap'] !== null ) {
+			$pt_obj = get_post_type_object( $post->post_type );
+			$cap    = $pt_obj->cap->{$spec['cap']} ?? $spec['cap'];
+			if ( ! current_user_can( $cap ) ) {
+				wp_send_json_error( [ 'message' => __( 'You cannot change this field.', 'columnkit' ) ], 403 );
+			}
 		}
 
 		$update = [ 'ID' => $post->ID ];

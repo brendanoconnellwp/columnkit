@@ -138,7 +138,7 @@ final class DataExporter {
 				}
 			}
 			// Sort
-			$orderby = isset( $_GET['orderby'] ) ? (string) $_GET['orderby'] : '';
+			$orderby = isset( $_GET['orderby'] ) && is_string( $_GET['orderby'] ) ? wp_unslash( $_GET['orderby'] ) : '';
 			if ( str_starts_with( $orderby, 'ck_' ) ) {
 				$col_id = substr( $orderby, 3 );
 				foreach ( $columns as $entry ) {
@@ -147,7 +147,7 @@ final class DataExporter {
 					}
 					$col = $this->registry->get( (string) ( $entry['type'] ?? '' ) );
 					if ( $col instanceof SortableColumn ) {
-						$order    = strtoupper( (string) ( $_GET['order'] ?? 'DESC' ) );
+						$order    = isset( $_GET['order'] ) && is_scalar( $_GET['order'] ) ? strtoupper( (string) $_GET['order'] ) : 'DESC';
 						$order    = $order === 'ASC' ? 'ASC' : 'DESC';
 						$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
 						$col->apply_sort( $q, $settings, $order );
@@ -165,9 +165,14 @@ final class DataExporter {
 		// the export builds its own query outside edit.php's scoping.
 		$can_edit_others = current_user_can( $pt_obj->cap->edit_others_posts );
 
+		// Cap the result set — an unbounded -1 query materialises every matching post in memory
+		// and lets any user with edit_posts exhaust PHP memory / hog the DB on large sites.
+		// Filterable for sites that genuinely need bigger exports.
+		$max_rows = (int) apply_filters( 'columnkit/export_max_rows', 10000, $post_type );
+
 		$base_args = [
 			'post_type'      => $post_type,
-			'posts_per_page' => -1,
+			'posts_per_page' => $max_rows > 0 ? $max_rows : -1,
 			'no_found_rows'  => true,
 			'post_status'    => 'any',
 			'perm'           => 'editable',
@@ -312,7 +317,7 @@ final class DataExporter {
 		$out = [];
 		foreach ( $keys as $suffix ) {
 			$param = 'ck_f_' . $col_id . ( $suffix === '' ? '' : '__' . $suffix );
-			$raw   = isset( $_GET[ $param ] ) ? wp_unslash( (string) $_GET[ $param ] ) : '';
+			$raw   = isset( $_GET[ $param ] ) && is_scalar( $_GET[ $param ] ) ? wp_unslash( (string) $_GET[ $param ] ) : '';
 			$out[ $suffix ] = sanitize_text_field( $raw );
 		}
 		return $out;

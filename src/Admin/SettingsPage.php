@@ -42,7 +42,7 @@ final class SettingsPage {
 
 		$screens     = ScreenIdentifier::available_screens();
 		$default_key = array_key_first( $screens ) ?? '';
-		$screen_key  = isset( $_GET['screen'] ) ? sanitize_text_field( wp_unslash( (string) $_GET['screen'] ) ) : $default_key;
+		$screen_key  = isset( $_GET['screen'] ) && is_string( $_GET['screen'] ) ? sanitize_text_field( wp_unslash( $_GET['screen'] ) ) : $default_key;
 		if ( ! isset( $screens[ $screen_key ] ) ) {
 			$screen_key = $default_key;
 		}
@@ -63,18 +63,7 @@ final class SettingsPage {
 				</div>
 			<?php endif; ?>
 
-			<?php
-			// Flash messages from import/export.
-			if ( isset( $_GET['ck_message'] ) ) {
-				$level = isset( $_GET['ck_level'] ) && $_GET['ck_level'] === 'error' ? 'error' : 'success';
-				$msg   = rawurldecode( (string) $_GET['ck_message'] );
-				printf(
-					'<div class="notice notice-%s is-dismissible"><p>%s</p></div>',
-					esc_attr( $level ),
-					esc_html( $msg )
-				);
-			}
-			?>
+			<?php $this->render_flash_notice(); ?>
 
 			<form method="get" class="ck-screen-picker">
 				<input type="hidden" name="page" value="<?php echo esc_attr( self::MENU_SLUG ); ?>">
@@ -127,6 +116,41 @@ final class SettingsPage {
 			<?php $this->settings_exporter->render_section(); ?>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Flash messages from import/export. Only whitelisted message codes are rendered — free-text
+	 * GET params must never reach a trusted admin notice, even escaped, or a crafted link could
+	 * plant arbitrary instructions ("Your site is at risk, go to ...") inside wp-admin chrome.
+	 */
+	private function render_flash_notice(): void {
+		if ( ! isset( $_GET['ck_msg'] ) || ! is_string( $_GET['ck_msg'] ) ) {
+			return;
+		}
+		$code  = sanitize_key( wp_unslash( $_GET['ck_msg'] ) );
+		$count = isset( $_GET['ck_count'] ) && is_scalar( $_GET['ck_count'] ) ? max( 0, (int) $_GET['ck_count'] ) : 0;
+
+		if ( $code === 'imported' ) {
+			$msg = sprintf(
+				/* translators: %d: number of screens imported */
+				_n( 'Imported %d screen.', 'Imported %d screens.', $count, 'columnkit' ),
+				$count
+			);
+			printf( '<div class="notice notice-success is-dismissible"><p>%s</p></div>', esc_html( $msg ) );
+			return;
+		}
+
+		$errors = [
+			'no_file'        => __( 'No file uploaded.', 'columnkit' ),
+			'upload_failed'  => __( 'Upload failed.', 'columnkit' ),
+			'file_invalid'   => __( 'File too large or empty.', 'columnkit' ),
+			'invalid_upload' => __( 'Invalid upload.', 'columnkit' ),
+			'unreadable'     => __( 'Could not read file.', 'columnkit' ),
+			'invalid_json'   => __( 'Invalid JSON structure.', 'columnkit' ),
+		];
+		if ( isset( $errors[ $code ] ) ) {
+			printf( '<div class="notice notice-error is-dismissible"><p>%s</p></div>', esc_html( $errors[ $code ] ) );
+		}
 	}
 
 	/**
@@ -232,7 +256,7 @@ final class SettingsPage {
 		}
 		check_admin_referer( self::NONCE );
 
-		$screen_key = isset( $_POST['screen'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['screen'] ) ) : '';
+		$screen_key = isset( $_POST['screen'] ) && is_string( $_POST['screen'] ) ? sanitize_text_field( wp_unslash( $_POST['screen'] ) ) : '';
 		$screens    = ScreenIdentifier::available_screens();
 		if ( ! isset( $screens[ $screen_key ] ) ) {
 			wp_die( esc_html__( 'Unknown screen.', 'columnkit' ), '', [ 'response' => 400 ] );
@@ -241,7 +265,7 @@ final class SettingsPage {
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce checked above.
 		$raw_columns = isset( $_POST['columns'] ) ? wp_unslash( $_POST['columns'] ) : [];
 		$sanitizer   = new Sanitizer( $this->registry );
-		$clean       = $sanitizer->sanitize_columns( $raw_columns );
+		$clean       = $sanitizer->sanitize_columns( $raw_columns, $screen_key );
 
 		$this->repository->save( $screen_key, $clean );
 

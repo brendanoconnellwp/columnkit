@@ -13,10 +13,14 @@ final class Sanitizer {
 	public function __construct( private ColumnRegistry $registry ) {}
 
 	/**
-	 * @param mixed $raw The raw POSTed payload (expected to be an array of column entries).
+	 * @param mixed       $raw        The raw POSTed payload (expected to be an array of column entries).
+	 * @param string|null $screen_key When given, columns whose type doesn't apply to this screen
+	 *                                are dropped. A user-meta column persisted onto a posts screen
+	 *                                would otherwise render get_user_meta(<post_id>) — leaking
+	 *                                meta of whichever user shares that ID.
 	 * @return array<int, array<string, mixed>> sanitised columns
 	 */
-	public function sanitize_columns( $raw ): array {
+	public function sanitize_columns( $raw, ?string $screen_key = null ): array {
 		if ( ! is_array( $raw ) ) {
 			return [];
 		}
@@ -30,6 +34,9 @@ final class Sanitizer {
 			$col  = $this->registry->get( $type );
 			if ( ! $col ) {
 				continue; // Unknown type — drop silently.
+			}
+			if ( $screen_key !== null && ! $col->applies_to_screen( $screen_key ) ) {
+				continue; // Type not valid for this screen — drop.
 			}
 
 			$id = isset( $entry['id'] ) && is_string( $entry['id'] ) ? $entry['id'] : '';
