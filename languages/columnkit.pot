@@ -746,3 +746,37 @@ msgstr ""
 #: src/Admin/SettingsPage.php
 msgid "Background"
 msgstr ""
+
+# --- 0.6.0: settings UX overhaul ---
+
+#: src/Admin/SettingsPage.php
+msgid "Toggle column settings"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Drag to reorder"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Add column"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Search column types…"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Search column types"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "No matching column types."
+msgstr ""
+
+#: src/Columns/PostMetaColumn.php
+msgid "The custom-field key to read, e.g. _price. Hidden keys (leading underscore) are allowed."
+msgstr ""
+
+#: src/Columns/PostMetaColumn.php
+msgid "Controls sorting, the inline-edit input, and how the value is displayed."
+msgstr ""

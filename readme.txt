@@ -18,6 +18,7 @@ Personal plugin for replacing paid SaaS column-management plugins. v0.1 ships Ph
 = 0.6.0 =
 * Added: Column Sets (saved views) — define multiple named column layouts per screen (e.g. "SEO view", "Editorial view") and switch between them from a dropdown above the list table. Each user's choice is remembered per screen. Inline-edit, bulk-edit, and export all follow the active view.
 * Added: per-column display formatting — set width, text alignment, a text prefix/suffix, and an optional coloured badge/pill (text + background colour) per column. Prefix/suffix carry through to CSV/JSON export.
+* Improved: settings page redesign — collapsible column rows with live summaries, a searchable "Add column" picker with type descriptions, per-field inline help, a colour picker for badge colours, and a sticky Save bar.
 * Changed: per-screen settings storage migrated from a flat column list (schema v1) to named sets (schema v2). Existing configurations migrate automatically on first read; no action required.
 
 = 0.5.3 =

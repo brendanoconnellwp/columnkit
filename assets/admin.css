@@ -65,13 +65,48 @@
 	border-top-right-radius: 4px;
 }
 
+.ck-column-row.is-collapsed .ck-column-head {
+	border-bottom: none;
+}
+
 .ck-handle {
 	cursor: move;
 	color: #646970;
 }
 
-.ck-type-label {
+.ck-collapse-toggle {
+	background: none;
+	border: none;
+	padding: 0;
+	margin: 0;
+	cursor: pointer;
+	color: #646970;
+	display: inline-flex;
+}
+
+.ck-caret {
+	transition: transform 0.15s ease;
+}
+
+.ck-column-row.is-collapsed .ck-caret {
+	transform: rotate(-90deg);
+}
+
+.ck-head-text {
 	flex: 1;
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	cursor: pointer;
+	min-width: 0;
+}
+
+.ck-head-summary {
+	color: #646970;
+	font-style: italic;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ck-remove {
@@ -83,6 +118,21 @@
 
 .ck-column-body {
 	padding: 12px;
+}
+
+.ck-column-row.is-collapsed .ck-column-body {
+	display: none;
+}
+
+.ck-col-desc {
+	margin-top: 0;
+}
+
+.ck-field-help {
+	display: block;
+	margin-top: 2px;
+	font-size: 12px;
+	color: #646970;
 }
 
 .ck-column-body p {
@@ -123,12 +173,91 @@
 	max-width: 100%;
 }
 
-.ck-add-row {
+/* Add-column picker */
+.ck-add-panel {
+	position: relative;
 	margin: 16px 0;
-	padding: 12px;
-	background: #f6f7f7;
-	border: 1px dashed #c3c4c7;
+}
+
+.ck-add-toggle .dashicons {
+	vertical-align: text-bottom;
+}
+
+.ck-picker {
+	margin-top: 8px;
+	max-width: 420px;
+	background: #fff;
+	border: 1px solid #c3c4c7;
 	border-radius: 4px;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+	overflow: hidden;
+}
+
+.ck-picker-search {
+	width: 100%;
+	box-sizing: border-box;
+	border: none;
+	border-bottom: 1px solid #dcdcde;
+	padding: 10px 12px;
+	border-radius: 0;
+}
+
+.ck-picker-search:focus {
+	box-shadow: none;
+	border-bottom-color: #2271b1;
+}
+
+.ck-picker-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	max-height: 320px;
+	overflow-y: auto;
+}
+
+.ck-picker-item {
+	display: block;
+	width: 100%;
+	text-align: left;
+	background: none;
+	border: none;
+	border-bottom: 1px solid #f0f0f1;
+	padding: 9px 12px;
+	cursor: pointer;
+}
+
+.ck-picker-item:hover,
+.ck-picker-item:focus {
+	background: #f0f6fc;
+	outline: none;
+}
+
+.ck-picker-name {
+	display: block;
+	font-weight: 600;
+	color: #1d2327;
+}
+
+.ck-picker-desc {
+	display: block;
+	font-size: 12px;
+	color: #646970;
+}
+
+.ck-picker-empty {
+	margin: 0;
+	padding: 12px;
+	color: #646970;
+}
+
+.ck-submit-bar {
+	position: sticky;
+	bottom: 0;
+	background: #f0f0f1;
+	margin: 16px 0 0;
+	padding: 12px 0;
+	border-top: 1px solid #dcdcde;
+	z-index: 1;
 }
 
 .ck-column-row.ui-sortable-helper {

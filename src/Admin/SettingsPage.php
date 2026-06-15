@@ -103,22 +103,33 @@ final class SettingsPage {
 					endforeach; ?>
 				</div>
 
-				<div class="ck-add-row">
-					<label>
-						<?php esc_html_e( 'Add column:', 'columnkit' ); ?>
-						<select id="ck-add-type">
+				<div class="ck-add-panel">
+					<button type="button" class="button button-secondary ck-add-toggle" aria-expanded="false">
+						<span class="dashicons dashicons-plus-alt2" aria-hidden="true"></span>
+						<?php esc_html_e( 'Add column', 'columnkit' ); ?>
+					</button>
+					<div class="ck-picker" hidden>
+						<input type="search" class="ck-picker-search" placeholder="<?php esc_attr_e( 'Search column types…', 'columnkit' ); ?>" aria-label="<?php esc_attr_e( 'Search column types', 'columnkit' ); ?>">
+						<ul class="ck-picker-list">
 							<?php foreach ( $this->registry->all() as $type => $col ) :
-								if ( ! $col->applies_to_screen( $screen_key ) ) { continue; } ?>
-								<option value="<?php echo esc_attr( $type ); ?>">
-									<?php echo esc_html( $col->get_label() ); ?>
-								</option>
+								if ( ! $col->applies_to_screen( $screen_key ) ) { continue; }
+								$desc = $col->get_label() . ' ' . $col->get_description();
+								?>
+								<li>
+									<button type="button" class="ck-picker-item" data-type="<?php echo esc_attr( $type ); ?>" data-search="<?php echo esc_attr( strtolower( $desc ) ); ?>">
+										<span class="ck-picker-name"><?php echo esc_html( $col->get_label() ); ?></span>
+										<?php if ( $col->get_description() !== '' ) : ?>
+											<span class="ck-picker-desc"><?php echo esc_html( $col->get_description() ); ?></span>
+										<?php endif; ?>
+									</button>
+								</li>
 							<?php endforeach; ?>
-						</select>
-					</label>
-					<button type="button" class="button" id="ck-add"><?php esc_html_e( 'Add', 'columnkit' ); ?></button>
+						</ul>
+						<p class="ck-picker-empty" hidden><?php esc_html_e( 'No matching column types.', 'columnkit' ); ?></p>
+					</div>
 				</div>
 
-				<p class="submit">
+				<p class="submit ck-submit-bar">
 					<button type="submit" class="button button-primary"><?php esc_html_e( 'Save Columns', 'columnkit' ); ?></button>
 				</p>
 			</form>
@@ -258,20 +269,30 @@ final class SettingsPage {
 		$format   = is_array( $entry['format'] ?? null ) ? $entry['format'] : [];
 		$prefix   = 'columns[' . $index . ']';
 
+		$description = $col->get_description();
 		?>
 		<div class="ck-column-row" data-type="<?php echo esc_attr( $type ); ?>">
 			<div class="ck-column-head">
-				<span class="ck-handle dashicons dashicons-menu" aria-hidden="true"></span>
-				<strong class="ck-type-label"><?php echo esc_html( $col->get_label() ); ?></strong>
+				<span class="ck-handle dashicons dashicons-menu" aria-hidden="true" title="<?php esc_attr_e( 'Drag to reorder', 'columnkit' ); ?>"></span>
+				<button type="button" class="ck-collapse-toggle" aria-expanded="true" aria-label="<?php esc_attr_e( 'Toggle column settings', 'columnkit' ); ?>">
+					<span class="ck-caret dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span>
+				</button>
+				<span class="ck-head-text">
+					<strong class="ck-type-label"><?php echo esc_html( $col->get_label() ); ?></strong>
+					<span class="ck-head-summary"><?php echo esc_html( $label ); ?></span>
+				</span>
 				<button type="button" class="button-link ck-remove" aria-label="<?php esc_attr_e( 'Remove column', 'columnkit' ); ?>">&times;</button>
 			</div>
 			<div class="ck-column-body">
 				<input type="hidden" name="<?php echo esc_attr( $prefix ); ?>[id]" value="<?php echo esc_attr( $id ); ?>">
 				<input type="hidden" name="<?php echo esc_attr( $prefix ); ?>[type]" value="<?php echo esc_attr( $type ); ?>">
+				<?php if ( $description !== '' ) : ?>
+					<p class="ck-col-desc description"><?php echo esc_html( $description ); ?></p>
+				<?php endif; ?>
 				<p>
 					<label>
 						<?php esc_html_e( 'Label', 'columnkit' ); ?><br>
-						<input type="text" class="regular-text" name="<?php echo esc_attr( $prefix ); ?>[label]" value="<?php echo esc_attr( $label ); ?>">
+						<input type="text" class="regular-text ck-label-input" name="<?php echo esc_attr( $prefix ); ?>[label]" value="<?php echo esc_attr( $label ); ?>">
 					</label>
 				</p>
 				<?php foreach ( $col->settings_fields() as $field ) : ?>
@@ -383,6 +404,11 @@ final class SettingsPage {
 			);
 		}
 		echo '</label>';
+
+		$help = isset( $field['help'] ) && is_string( $field['help'] ) ? $field['help'] : '';
+		if ( $help !== '' ) {
+			echo '<span class="ck-field-help description">' . esc_html( $help ) . '</span>';
+		}
 	}
 
 	/** Hidden <template> blocks used by admin.js to clone new rows. */

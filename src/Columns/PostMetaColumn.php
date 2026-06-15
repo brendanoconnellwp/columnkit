@@ -29,6 +29,7 @@ final class PostMetaColumn extends BaseColumn implements SortableColumn, Filtera
 				'label'    => __( 'Meta key', 'columnkit' ),
 				'type'     => 'text',
 				'required' => true,
+				'help'     => __( 'The custom-field key to read, e.g. _price. Hidden keys (leading underscore) are allowed.', 'columnkit' ),
 			],
 			[
 				'key'     => 'value_type',
@@ -40,6 +41,7 @@ final class PostMetaColumn extends BaseColumn implements SortableColumn, Filtera
 					'date'    => __( 'Date', 'columnkit' ),
 					'boolean' => __( 'Yes / No', 'columnkit' ),
 				],
+				'help'    => __( 'Controls sorting, the inline-edit input, and how the value is displayed.', 'columnkit' ),
 			],
 		];
 	}
