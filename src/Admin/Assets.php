@@ -9,7 +9,18 @@ final class Assets {
 	}
 
 	public function enqueue( string $hook ): void {
-		// View switcher — load on any list table where it might render (posts, media, users).
+		// List-table display formatting (badges, prefix/suffix, view switcher) — load anywhere
+		// our custom cells can render.
+		if ( in_array( $hook, [ 'edit.php', 'upload.php', 'users.php', 'edit-tags.php' ], true ) ) {
+			wp_enqueue_style(
+				'ck-list-screen',
+				CK_URL . 'assets/list-screen.css',
+				[],
+				CK_VERSION
+			);
+		}
+
+		// View switcher — load on the list tables where it can appear (posts, media, users).
 		if ( in_array( $hook, [ 'edit.php', 'upload.php', 'users.php' ], true ) ) {
 			wp_enqueue_script(
 				'ck-list-screen',
@@ -22,16 +33,17 @@ final class Assets {
 
 		// Settings page assets.
 		if ( $hook === 'settings_page_columnkit' ) {
+			wp_enqueue_style( 'wp-color-picker' );
 			wp_enqueue_style(
 				'ck-admin',
 				CK_URL . 'assets/admin.css',
-				[],
+				[ 'wp-color-picker' ],
 				CK_VERSION
 			);
 			wp_enqueue_script(
 				'ck-admin',
 				CK_URL . 'assets/admin.js',
-				[ 'jquery', 'jquery-ui-sortable' ],
+				[ 'jquery', 'jquery-ui-sortable', 'wp-color-picker' ],
 				CK_VERSION,
 				true
 			);

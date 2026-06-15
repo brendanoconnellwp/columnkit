@@ -7,6 +7,7 @@ use ColumnKit\Admin\DataExporter;
 use ColumnKit\ColumnRegistry;
 use ColumnKit\Columns\EditableColumn;
 use ColumnKit\Settings\SettingsRepository;
+use ColumnKit\Support\ColumnPresenter;
 use ColumnKit\Support\Editability;
 use ColumnKit\Support\ScreenIdentifier;
 use ColumnKit\Support\SetResolver;
@@ -79,6 +80,9 @@ final class ListScreenManager {
 
 		$this->active_screen_key = $screen_key;
 		$this->active_columns    = $columns;
+
+		// Width + alignment are column-level CSS (so header and cells line up), injected once.
+		add_action( 'admin_head', [ $this, 'print_column_styles' ] );
 
 		// Dispatch by screen kind.
 		if ( ScreenIdentifier::is_users( $screen_key ) ) {
@@ -175,6 +179,42 @@ final class ListScreenManager {
 	}
 
 	/**
+	 * Emit a <style> block applying per-column width + text-alignment. WP tags each header/cell
+	 * with `column-{key}` (our key is `ck_{id}`), so a single rule lines up the header and every
+	 * row. Width is a layout hint on an auto-layout table — best-effort, like Admin Columns.
+	 */
+	public function print_column_styles(): void {
+		$rules = [];
+		foreach ( $this->active_columns as $entry ) {
+			$id = preg_replace( '/[^a-z0-9_]/i', '', (string) ( $entry['id'] ?? '' ) );
+			if ( $id === '' ) {
+				continue;
+			}
+			$decls = [];
+
+			$width = isset( $entry['width'] ) ? (string) $entry['width'] : '';
+			$width = preg_replace( '/[^0-9a-z%px]/i', '', $width );
+			if ( $width !== '' && preg_match( '/^\d+(px|%|em|rem)?$/', $width ) ) {
+				$unit  = preg_match( '/(px|%|em|rem)$/', $width ) ? '' : 'px';
+				$decls[] = 'width:' . $width . $unit;
+			}
+
+			$format = is_array( $entry['format'] ?? null ) ? $entry['format'] : [];
+			$align  = isset( $format['align'] ) && is_string( $format['align'] ) ? $format['align'] : '';
+			if ( in_array( $align, [ 'left', 'center', 'right' ], true ) ) {
+				$decls[] = 'text-align:' . $align;
+			}
+
+			if ( $decls ) {
+				$rules[] = '.wp-list-table .column-ck_' . $id . '{' . implode( ';', $decls ) . '}';
+			}
+		}
+		if ( $rules ) {
+			echo "<style id='ck-column-styles'>" . implode( '', $rules ) . "</style>\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- values are tightly whitelisted above.
+		}
+	}
+
+	/**
 	 * @param array<int, array<string, mixed>> $columns
 	 */
 	private function wire_post_extras( string $post_type, array $columns ): void {
@@ -212,7 +252,8 @@ final class ListScreenManager {
 				return;
 			}
 			$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
-			$html     = $col->render( $post_id, $settings );
+			$format   = is_array( $entry['format'] ?? null ) ? $entry['format'] : [];
+			$html     = ColumnPresenter::format( $col->render( $post_id, $settings ), $format );
 
 			if ( $col instanceof EditableColumn && Editability::is_editable( $col, $settings ) ) {
 				$raw         = $col->get_raw_value( $post_id, $settings );
@@ -256,7 +297,8 @@ final class ListScreenManager {
 				return $value;
 			}
 			$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
-			return (string) $col->render( $object_id, $settings );
+			$format   = is_array( $entry['format'] ?? null ) ? $entry['format'] : [];
+			return ColumnPresenter::format( (string) $col->render( $object_id, $settings ), $format );
 		}
 		return $value;
 	}

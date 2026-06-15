@@ -27,6 +27,14 @@ final class SanitizerTest extends TestCase {
 				$s = preg_replace( '#<(script|style)[^>]*?>.*?</\1>#si', '', $s );
 				return trim( strip_tags( $s ) );
 			},
+			// Mirror WP: '' for empty, the colour for valid #rgb / #rrggbb, null otherwise.
+			'sanitize_hex_color' => static function ( $c ) {
+				$c = (string) $c;
+				if ( $c === '' ) {
+					return '';
+				}
+				return preg_match( '/^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/', $c ) ? $c : null;
+			},
 		] );
 
 		$registry = new ColumnRegistry();
@@ -76,6 +84,58 @@ final class SanitizerTest extends TestCase {
 			[ 'id' => 'a', 'type' => 'post_id', 'label' => '' ],
 		] );
 		$this->assertNotSame( '', $out[0]['label'] );
+	}
+
+	public function test_format_block_is_sanitised(): void {
+		$out = $this->sanitizer->sanitize_columns( [
+			[
+				'id'     => 'a',
+				'type'   => 'post_id',
+				'format' => [
+					'align'  => 'right',
+					'prefix' => '<b>$</b>',
+					'suffix' => ' USD',
+					'style'  => 'badge',
+					'color'  => '#fff',
+					'bg'     => '#1d2327',
+				],
+			],
+		] );
+		$fmt = $out[0]['format'];
+		$this->assertSame( 'right', $fmt['align'] );
+		$this->assertSame( '$', $fmt['prefix'] ); // tags stripped
+		$this->assertSame( 'USD', $fmt['suffix'] ); // sanitize_text_field trims
+		$this->assertSame( 'badge', $fmt['style'] );
+		$this->assertSame( '#fff', $fmt['color'] );
+		$this->assertSame( '#1d2327', $fmt['bg'] );
+	}
+
+	public function test_format_rejects_bad_values(): void {
+		$out = $this->sanitizer->sanitize_columns( [
+			[
+				'id'     => 'a',
+				'type'   => 'post_id',
+				'format' => [
+					'align' => 'diagonal',
+					'style' => 'marquee',
+					'color' => 'red; expression(alert(1))',
+					'bg'    => 'javascript:void',
+				],
+			],
+		] );
+		$fmt = $out[0]['format'];
+		$this->assertSame( '', $fmt['align'] );
+		$this->assertSame( '', $fmt['style'] );
+		$this->assertSame( '', $fmt['color'] ); // invalid hex → null → ''
+		$this->assertSame( '', $fmt['bg'] );
+	}
+
+	public function test_missing_format_defaults_to_empty_block(): void {
+		$out = $this->sanitizer->sanitize_columns( [
+			[ 'id' => 'a', 'type' => 'post_id' ],
+		] );
+		$this->assertArrayHasKey( 'format', $out[0] );
+		$this->assertSame( [ 'align' => '', 'prefix' => '', 'suffix' => '', 'style' => '', 'color' => '', 'bg' => '' ], $out[0]['format'] );
 	}
 
 	public function test_post_meta_settings_whitelisted(): void {

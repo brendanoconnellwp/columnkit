@@ -1,0 +1,30 @@
+/* Per-column display formatting on admin list tables. */
+
+.ck-view-switcher {
+	display: inline-block;
+	margin: 0 6px 0 0;
+	vertical-align: middle;
+}
+
+.ck-affix {
+	color: #646970;
+}
+
+.ck-prefix {
+	margin-right: 1px;
+}
+
+.ck-suffix {
+	margin-left: 1px;
+}
+
+.ck-badge {
+	display: inline-block;
+	padding: 1px 8px;
+	border-radius: 9px;
+	font-size: 12px;
+	line-height: 1.6;
+	background: #f0f0f1;
+	color: #1d2327;
+	white-space: nowrap;
+}

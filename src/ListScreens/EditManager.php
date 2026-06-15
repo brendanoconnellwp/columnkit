@@ -137,8 +137,10 @@ final class EditManager {
 		$col->save_value( $post_id, $value, $settings );
 
 		// Re-render the cell (the column's render() returns escaped HTML) and read back the raw value.
-		$html = $col->render( $post_id, $settings );
-		$raw  = $col->get_raw_value( $post_id, $settings );
+		// Apply the same display formatting the list table uses so prefix/suffix/badge survive a save.
+		$format = is_array( $entry['format'] ?? null ) ? $entry['format'] : [];
+		$html   = \ColumnKit\Support\ColumnPresenter::format( $col->render( $post_id, $settings ), $format );
+		$raw    = $col->get_raw_value( $post_id, $settings );
 
 		wp_send_json_success(
 			[

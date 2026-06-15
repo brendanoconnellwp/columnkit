@@ -12,6 +12,7 @@ Built as a six-phase exercise, with security and performance pitfalls documented
 |---|---|
 | Settings page (`Settings → Admin Columns`) | Pick a screen → choose/create a **view** → add / remove / drag-reorder columns → save |
 | Column Sets (saved views) | Define multiple named column layouts per screen ("SEO view", "Editorial view"…). Switch between them from a dropdown above the list table; each user's choice is remembered per screen. Inline-edit, bulk-edit, and export follow the active view |
+| Per-column display formatting | Width, text alignment, prefix/suffix, and an optional coloured badge/pill (text + background colour) — set per column in the row's **Display** panel. Prefix/suffix flow through to export |
 | Post / Page / CPT / Media list tables | Custom columns, sortable headers, filter inputs above the table |
 | Click any editable cell | Inline-edit popover with type-appropriate input (text/number/date/boolean/select). Saves via AJAX, updates the cell without page reload |
 | Quick-edit pencil on Title / Date / Author cells | Edit core fields without leaving the list |

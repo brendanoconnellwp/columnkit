@@ -24,6 +24,15 @@
 		return 'col' + Math.random().toString( 36 ).slice( 2, 10 );
 	}
 
+	function initColorPickers( $scope ) {
+		if ( ! $.fn.wpColorPicker ) { return; }
+		( $scope || $list ).find( '.ck-color' ).each( function () {
+			var $i = $( this );
+			if ( $i.data( 'ckColorInit' ) ) { return; }
+			$i.data( 'ckColorInit', true ).wpColorPicker();
+		} );
+	}
+
 	function addColumn( type ) {
 		var tplId = 'ck-tpl-' + type.replace( /[^a-z0-9_-]/gi, '' );
 		var tpl = document.getElementById( tplId );
@@ -32,8 +41,10 @@
 		// Stamp a fresh id into the hidden [id] input.
 		var idInput = clone.querySelector( 'input[name$="[id]"]' );
 		if ( idInput ) { idInput.value = generateId(); }
+		var $row = $( clone.querySelector( '.ck-column-row' ) );
 		$list[ 0 ].appendChild( clone );
 		reindex();
+		initColorPickers( $row );
 	}
 
 	function init() {
@@ -49,6 +60,8 @@
 				update: reindex,
 			} );
 		}
+
+		initColorPickers();
 
 		$addBtn.on( 'click', function () {
 			addColumn( $addType.val() );

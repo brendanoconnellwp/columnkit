@@ -688,3 +688,61 @@ msgstr ""
 #, php-format
 msgid "View: %s"
 msgstr ""
+
+# --- 0.6.0: per-column display formatting ---
+
+#: src/Admin/SettingsPage.php
+msgid "Display"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Width"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Align"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Default"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Left"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Center"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Right"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Prefix"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Suffix"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Style"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Plain text"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Badge / pill"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Text colour"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Background"
+msgstr ""

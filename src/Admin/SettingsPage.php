@@ -254,6 +254,8 @@ final class SettingsPage {
 		$id      = (string) ( $entry['id'] ?? '' );
 		$label   = (string) ( $entry['label'] ?? $col->get_label() );
 		$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
+		$width    = (string) ( $entry['width'] ?? '' );
+		$format   = is_array( $entry['format'] ?? null ) ? $entry['format'] : [];
 		$prefix   = 'columns[' . $index . ']';
 
 		?>
@@ -277,8 +279,70 @@ final class SettingsPage {
 						<?php $this->render_field( $prefix . '[settings]', $field, $settings ); ?>
 					</p>
 				<?php endforeach; ?>
+
+				<?php $this->render_display_fields( $prefix, $width, $format ); ?>
 			</div>
 		</div>
+		<?php
+	}
+
+	/**
+	 * Per-column "Display" controls: width, alignment, prefix/suffix, badge + colours.
+	 *
+	 * @param array<string, mixed> $format
+	 */
+	private function render_display_fields( string $prefix, string $width, array $format ): void {
+		$align = (string) ( $format['align'] ?? '' );
+		$style = (string) ( $format['style'] ?? '' );
+		?>
+		<details class="ck-display">
+			<summary><?php esc_html_e( 'Display', 'columnkit' ); ?></summary>
+			<div class="ck-display-grid">
+				<label>
+					<?php esc_html_e( 'Width', 'columnkit' ); ?><br>
+					<input type="text" class="small-text" name="<?php echo esc_attr( $prefix ); ?>[width]" value="<?php echo esc_attr( $width ); ?>" placeholder="120px">
+				</label>
+				<label>
+					<?php esc_html_e( 'Align', 'columnkit' ); ?><br>
+					<select name="<?php echo esc_attr( $prefix ); ?>[format][align]">
+						<?php
+						$align_opts = [
+							''       => __( 'Default', 'columnkit' ),
+							'left'   => __( 'Left', 'columnkit' ),
+							'center' => __( 'Center', 'columnkit' ),
+							'right'  => __( 'Right', 'columnkit' ),
+						];
+						foreach ( $align_opts as $val => $opt_label ) {
+							printf( '<option value="%s" %s>%s</option>', esc_attr( $val ), selected( $val, $align, false ), esc_html( $opt_label ) );
+						}
+						?>
+					</select>
+				</label>
+				<label>
+					<?php esc_html_e( 'Prefix', 'columnkit' ); ?><br>
+					<input type="text" class="regular-text" name="<?php echo esc_attr( $prefix ); ?>[format][prefix]" value="<?php echo esc_attr( (string) ( $format['prefix'] ?? '' ) ); ?>" placeholder="$">
+				</label>
+				<label>
+					<?php esc_html_e( 'Suffix', 'columnkit' ); ?><br>
+					<input type="text" class="regular-text" name="<?php echo esc_attr( $prefix ); ?>[format][suffix]" value="<?php echo esc_attr( (string) ( $format['suffix'] ?? '' ) ); ?>" placeholder="kg">
+				</label>
+				<label>
+					<?php esc_html_e( 'Style', 'columnkit' ); ?><br>
+					<select name="<?php echo esc_attr( $prefix ); ?>[format][style]">
+						<option value="" <?php selected( '', $style ); ?>><?php esc_html_e( 'Plain text', 'columnkit' ); ?></option>
+						<option value="badge" <?php selected( 'badge', $style ); ?>><?php esc_html_e( 'Badge / pill', 'columnkit' ); ?></option>
+					</select>
+				</label>
+				<label>
+					<?php esc_html_e( 'Text colour', 'columnkit' ); ?><br>
+					<input type="text" class="ck-color" name="<?php echo esc_attr( $prefix ); ?>[format][color]" value="<?php echo esc_attr( (string) ( $format['color'] ?? '' ) ); ?>" placeholder="#1d2327">
+				</label>
+				<label>
+					<?php esc_html_e( 'Background', 'columnkit' ); ?><br>
+					<input type="text" class="ck-color" name="<?php echo esc_attr( $prefix ); ?>[format][bg]" value="<?php echo esc_attr( (string) ( $format['bg'] ?? '' ) ); ?>" placeholder="#f0f0f1">
+				</label>
+			</div>
+		</details>
 		<?php
 	}
 
