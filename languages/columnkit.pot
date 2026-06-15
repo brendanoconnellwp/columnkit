@@ -610,3 +610,81 @@ msgstr ""
 #, php-format
 msgid "Taxonomy — %s"
 msgstr ""
+
+# --- 0.6.0: Column Sets (saved views) ---
+
+#: src/Admin/SettingsPage.php
+msgid "Pick a list screen and a view, then add the columns you want shown. Drag to reorder."
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "View created."
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "View renamed."
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "View duplicated."
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "View deleted."
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Column views"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "New view name…"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Add view"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Rename current view"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Rename"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Duplicate"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Delete this view? Its columns will be removed."
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Delete view"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "New view"
+msgstr ""
+
+#. translators: %s: source view name
+#: src/Admin/SettingsPage.php
+#, php-format
+msgid "%s (copy)"
+msgstr ""
+
+#: src/Admin/SettingsPage.php
+msgid "Unknown action."
+msgstr ""
+
+#: src/ListScreens/ListScreenManager.php
+msgid "Column view"
+msgstr ""
+
+#. translators: %s: column view name
+#: src/ListScreens/ListScreenManager.php
+#, php-format
+msgid "View: %s"
+msgstr ""

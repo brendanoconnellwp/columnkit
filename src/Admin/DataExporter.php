@@ -7,6 +7,7 @@ use ColumnKit\ColumnRegistry;
 use ColumnKit\Columns\FilterableColumn;
 use ColumnKit\Columns\SortableColumn;
 use ColumnKit\Settings\SettingsRepository;
+use ColumnKit\Support\SetResolver;
 use WP_Query;
 
 /**
@@ -107,7 +108,10 @@ final class DataExporter {
 		}
 
 		$screen_key = 'post_type:' . $post_type;
-		$columns    = $this->repository->get_columns( $screen_key );
+		$set_id     = isset( $_GET[ SetResolver::REQUEST_PARAM ] ) && is_string( $_GET[ SetResolver::REQUEST_PARAM ] )
+			? SettingsRepository::sanitize_set_id( wp_unslash( $_GET[ SetResolver::REQUEST_PARAM ] ) )
+			: SettingsRepository::DEFAULT_SET;
+		$columns    = $this->repository->get_columns( $screen_key, $set_id );
 		if ( empty( $columns ) ) {
 			wp_die( esc_html__( 'No columns configured for this screen.', 'columnkit' ), '', [ 'response' => 400 ] );
 		}

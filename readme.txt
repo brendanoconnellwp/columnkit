@@ -4,7 +4,7 @@ Tags: admin columns, custom fields, list table
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.5.3
+Stable tag: 0.6.0
 License: GPLv2 or later
 
 Customise WordPress admin list tables: add, remove, reorder columns; filter, sort, inline-edit, bulk-edit, and export them.
@@ -14,6 +14,10 @@ Customise WordPress admin list tables: add, remove, reorder columns; filter, sor
 Personal plugin for replacing paid SaaS column-management plugins. v0.1 ships Phase 1 (custom columns + admin UI on Posts and Pages). Later phases add sorting/filtering, inline & bulk edit, export, and integrations with ACF, WooCommerce, and Yoast.
 
 == Changelog ==
+
+= 0.6.0 =
+* Added: Column Sets (saved views) — define multiple named column layouts per screen (e.g. "SEO view", "Editorial view") and switch between them from a dropdown above the list table. Each user's choice is remembered per screen. Inline-edit, bulk-edit, and export all follow the active view.
+* Changed: per-screen settings storage migrated from a flat column list (schema v1) to named sets (schema v2). Existing configurations migrate automatically on first read; no action required.
 
 = 0.5.3 =
 * Fixed: core Title/Date/Author inline edit silently no-op'd on hierarchical list tables (Pages and hierarchical CPTs) because per-row data was skipped for non-WP_Post query rows.

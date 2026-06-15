@@ -9,6 +9,7 @@ use ColumnKit\Columns\EditableColumn;
 use ColumnKit\Settings\SettingsRepository;
 use ColumnKit\Support\Editability;
 use ColumnKit\Support\ScreenIdentifier;
+use ColumnKit\Support\SetResolver;
 
 /**
  * Wires custom columns into admin list tables — posts, media, users, taxonomies.
@@ -26,6 +27,7 @@ use ColumnKit\Support\ScreenIdentifier;
 final class ListScreenManager {
 	private ?string $active_screen_key = null;
 	private string  $active_post_type  = '';
+	private string  $active_set_id     = SettingsRepository::DEFAULT_SET;
 
 	/** @var array<int, array<string, mixed>> Currently-applied column definitions for this request. */
 	private array $active_columns = [];
@@ -67,7 +69,10 @@ final class ListScreenManager {
 		if ( $screen_key === null ) {
 			return;
 		}
-		$columns = $this->repository->get_columns( $screen_key );
+
+		// Resolve which saved view (column set) this user is looking at, then load its columns.
+		$this->active_set_id = SetResolver::resolve( $this->repository, $screen_key );
+		$columns             = $this->repository->get_columns( $screen_key, $this->active_set_id );
 		if ( empty( $columns ) ) {
 			return;
 		}
@@ -79,6 +84,7 @@ final class ListScreenManager {
 		if ( ScreenIdentifier::is_users( $screen_key ) ) {
 			add_filter( 'manage_users_columns',       [ $this, 'filter_columns' ], 20 );
 			add_filter( 'manage_users_custom_column', [ $this, 'filter_user_or_term_cell' ], 10, 3 );
+			add_action( 'restrict_manage_users',      [ $this, 'render_user_view_switcher' ], 5, 1 );
 			return; // No sort/filter/edit/export on users in v1.
 		}
 
@@ -94,6 +100,7 @@ final class ListScreenManager {
 			add_filter( 'manage_media_columns',       [ $this, 'filter_columns' ], 20 );
 			add_action( 'manage_media_custom_column', [ $this, 'render_cell' ], 10, 2 );
 			add_filter( 'the_posts', [ $this, 'prewarm_meta_cache' ], 10, 2 );
+			add_action( 'restrict_manage_posts', [ $this, 'render_post_view_switcher' ], 5, 2 );
 			$this->wire_post_extras( 'attachment', $columns );
 			return;
 		}
@@ -108,8 +115,63 @@ final class ListScreenManager {
 		add_filter( "manage_{$post_type}_posts_columns",        [ $this, 'filter_columns' ], 20 );
 		add_action( "manage_{$post_type}_posts_custom_column", [ $this, 'render_cell' ], 10, 2 );
 		add_filter( 'the_posts', [ $this, 'prewarm_meta_cache' ], 10, 2 );
+		add_action( 'restrict_manage_posts', [ $this, 'render_post_view_switcher' ], 5, 2 );
 
 		$this->wire_post_extras( $post_type, $columns );
+	}
+
+	/** The set the current viewer is looking at. */
+	public function active_set_id(): string {
+		return $this->active_set_id;
+	}
+
+	/**
+	 * View switcher above post/media list tables. restrict_manage_posts passes the post type as
+	 * its first arg and fires for both top and bottom navs; we only render once (top).
+	 */
+	public function render_post_view_switcher( string $post_type, string $which = 'top' ): void {
+		if ( $this->active_screen_key === null || $which !== 'top' ) {
+			return; // Fires for top + bottom navs; render once to avoid duplicate element ids.
+		}
+		// Media passes 'attachment'; only render for the screen we activated on.
+		$expected = ScreenIdentifier::is_media( $this->active_screen_key ) ? 'attachment' : $this->active_post_type;
+		if ( $post_type !== $expected ) {
+			return;
+		}
+		$this->render_view_switcher( $this->active_screen_key );
+	}
+
+	/** View switcher above the users list table. */
+	public function render_user_view_switcher( string $which ): void {
+		if ( $this->active_screen_key === null || $which !== 'top' ) {
+			return;
+		}
+		$this->render_view_switcher( $this->active_screen_key );
+	}
+
+	/**
+	 * Renders a "view" dropdown that navigates to ?ck_set={id}, preserving the rest of the URL
+	 * (filters, search, sort). Only shown when the screen has more than one saved view.
+	 */
+	private function render_view_switcher( string $screen_key ): void {
+		$sets = $this->repository->get_sets( $screen_key );
+		if ( count( $sets ) < 2 ) {
+			return;
+		}
+		echo '<span class="ck-view-switcher">';
+		echo '<label class="screen-reader-text" for="ck-view-switcher">' . esc_html__( 'Column view', 'columnkit' ) . '</label>';
+		echo '<select id="ck-view-switcher" class="ck-view-select" data-ck-switcher="1">';
+		foreach ( $sets as $id => $label ) {
+			$url = add_query_arg( SetResolver::REQUEST_PARAM, $id );
+			printf(
+				'<option value="%s" %s>%s</option>',
+				esc_url( $url ),
+				selected( $id, $this->active_set_id, false ),
+				esc_html( sprintf( /* translators: %s: column view name */ __( 'View: %s', 'columnkit' ), $label ) )
+			);
+		}
+		echo '</select>';
+		echo '</span>';
 	}
 
 	/**

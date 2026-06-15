@@ -9,6 +9,17 @@ final class Assets {
 	}
 
 	public function enqueue( string $hook ): void {
+		// View switcher — load on any list table where it might render (posts, media, users).
+		if ( in_array( $hook, [ 'edit.php', 'upload.php', 'users.php' ], true ) ) {
+			wp_enqueue_script(
+				'ck-list-screen',
+				CK_URL . 'assets/list-screen.js',
+				[],
+				CK_VERSION,
+				true
+			);
+		}
+
 		// Settings page assets.
 		if ( $hook === 'settings_page_columnkit' ) {
 			wp_enqueue_style(
@@ -58,6 +69,7 @@ final class Assets {
 					'nonce'       => wp_create_nonce( \ColumnKit\ListScreens\EditManager::AJAX_NONCE ),
 					'action'      => \ColumnKit\ListScreens\EditManager::AJAX_ACTION,
 					'corePrefix'  => \ColumnKit\ListScreens\EditManager::CORE_PREFIX,
+					'set'         => \ColumnKit\Plugin::instance()->list_screen_manager()->active_set_id(),
 					'coreColumns' => \ColumnKit\ListScreens\EditManager::js_core_columns_config(),
 					'i18n'        => [
 						'save'         => __( 'Save', 'columnkit' ),

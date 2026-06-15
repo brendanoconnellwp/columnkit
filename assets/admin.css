@@ -6,6 +6,42 @@
 	max-width: 720px;
 }
 
+/* Column-set (saved view) toolbar */
+.ck-set-bar {
+	max-width: 720px;
+	margin: 12px 0 8px;
+}
+
+.ck-set-tabs.nav-tab-wrapper {
+	margin-bottom: 10px;
+}
+
+.ck-set-tools {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 12px;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+}
+
+.ck-set-form {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin: 0;
+}
+
+.ck-set-form input[type="text"] {
+	max-width: 180px;
+}
+
+.ck-set-tools .ck-set-delete {
+	margin-left: auto;
+}
+
 .ck-columns {
 	margin: 16px 0;
 }

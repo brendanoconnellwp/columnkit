@@ -94,6 +94,7 @@ final class EditManager {
 
 		$post_id = isset( $_POST['post_id'] ) && is_scalar( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0;
 		$col_id  = isset( $_POST['col_id'] ) && is_string( $_POST['col_id'] ) ? sanitize_key( wp_unslash( $_POST['col_id'] ) ) : '';
+		$set_id  = isset( $_POST['set'] ) && is_string( $_POST['set'] ) ? SettingsRepository::sanitize_set_id( wp_unslash( $_POST['set'] ) ) : SettingsRepository::DEFAULT_SET;
 		$value   = isset( $_POST['value'] ) && is_scalar( $_POST['value'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['value'] ) ) : '';
 
 		if ( $post_id <= 0 || $col_id === '' ) {
@@ -115,7 +116,7 @@ final class EditManager {
 		}
 
 		$screen_key = 'post_type:' . $post->post_type;
-		$columns    = $this->repository->get_columns( $screen_key );
+		$columns    = $this->repository->get_columns( $screen_key, $set_id );
 		$entry      = null;
 		foreach ( $columns as $candidate ) {
 			if ( ( $candidate['id'] ?? '' ) === $col_id ) {

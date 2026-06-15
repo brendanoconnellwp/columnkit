@@ -240,6 +240,7 @@
 				_ajax_nonce: CK_INLINE.nonce,
 				post_id:     ctx.postId,
 				col_id:      ctx.colId,
+				set:         CK_INLINE.set || 'default',
 				value:       $input.val()
 			}
 		} ).done( function ( resp ) {

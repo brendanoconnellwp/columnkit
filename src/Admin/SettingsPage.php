@@ -13,6 +13,8 @@ final class SettingsPage {
 	public const CAPABILITY = 'manage_options';
 	public const NONCE      = 'ck_save_columns';
 	public const ACTION     = 'ck_save_columns';
+	public const SET_ACTION = 'ck_set_action';
+	public const SET_NONCE  = 'ck_set_action';
 
 	public function __construct(
 		private ColumnRegistry $registry,
@@ -23,6 +25,7 @@ final class SettingsPage {
 	public function register_hooks(): void {
 		add_action( 'admin_menu', [ $this, 'register_menu' ] );
 		add_action( 'admin_post_' . self::ACTION, [ $this, 'handle_save' ] );
+		add_action( 'admin_post_' . self::SET_ACTION, [ $this, 'handle_set_action' ] );
 	}
 
 	public function register_menu(): void {
@@ -47,14 +50,20 @@ final class SettingsPage {
 			$screen_key = $default_key;
 		}
 
-		$columns = $screen_key !== '' ? $this->repository->get_columns( $screen_key ) : [];
+		$sets    = $screen_key !== '' ? $this->repository->get_sets( $screen_key ) : [ SettingsRepository::DEFAULT_SET => 'Default' ];
+		$set_id  = isset( $_GET['set'] ) && is_string( $_GET['set'] ) ? SettingsRepository::sanitize_set_id( wp_unslash( $_GET['set'] ) ) : SettingsRepository::DEFAULT_SET;
+		if ( ! isset( $sets[ $set_id ] ) ) {
+			$set_id = SettingsRepository::DEFAULT_SET;
+		}
+
+		$columns = $screen_key !== '' ? $this->repository->get_columns( $screen_key, $set_id ) : [];
 		$saved   = isset( $_GET['updated'] ) && $_GET['updated'] === '1';
 
 		?>
 		<div class="wrap ck-wrap">
 			<h1><?php esc_html_e( 'Admin Columns', 'columnkit' ); ?></h1>
 			<p class="description">
-				<?php esc_html_e( 'Pick a list screen, then add the columns you want shown. Drag to reorder.', 'columnkit' ); ?>
+				<?php esc_html_e( 'Pick a list screen and a view, then add the columns you want shown. Drag to reorder.', 'columnkit' ); ?>
 			</p>
 
 			<?php if ( $saved ) : ?>
@@ -80,9 +89,12 @@ final class SettingsPage {
 				<button type="submit" class="button"><?php esc_html_e( 'Load', 'columnkit' ); ?></button>
 			</form>
 
+			<?php $this->render_set_bar( $screen_key, $sets, $set_id ); ?>
+
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="ck-form" id="ck-form">
 				<input type="hidden" name="action" value="<?php echo esc_attr( self::ACTION ); ?>">
 				<input type="hidden" name="screen" value="<?php echo esc_attr( $screen_key ); ?>">
+				<input type="hidden" name="set" value="<?php echo esc_attr( $set_id ); ?>">
 				<?php wp_nonce_field( self::NONCE ); ?>
 
 				<div class="ck-columns" id="ck-columns">
@@ -119,6 +131,72 @@ final class SettingsPage {
 	}
 
 	/**
+	 * Column-set toolbar: tabs for each saved view plus create / rename / duplicate / delete.
+	 *
+	 * @param array<string, string> $sets
+	 */
+	private function render_set_bar( string $screen_key, array $sets, string $active_set ): void {
+		if ( $screen_key === '' ) {
+			return;
+		}
+		$base = [ 'page' => self::MENU_SLUG, 'screen' => $screen_key ];
+		$post_url = admin_url( 'admin-post.php' );
+		?>
+		<div class="ck-set-bar">
+			<nav class="ck-set-tabs nav-tab-wrapper" aria-label="<?php esc_attr_e( 'Column views', 'columnkit' ); ?>">
+				<?php foreach ( $sets as $id => $label ) :
+					$url = add_query_arg( $base + [ 'set' => $id ], admin_url( 'options-general.php' ) );
+					$classes = 'nav-tab' . ( $id === $active_set ? ' nav-tab-active' : '' );
+					?>
+					<a class="<?php echo esc_attr( $classes ); ?>" href="<?php echo esc_url( $url ); ?>"><?php echo esc_html( $label ); ?></a>
+				<?php endforeach; ?>
+			</nav>
+
+			<div class="ck-set-tools">
+				<form method="post" action="<?php echo esc_url( $post_url ); ?>" class="ck-set-form">
+					<input type="hidden" name="action" value="<?php echo esc_attr( self::SET_ACTION ); ?>">
+					<input type="hidden" name="op" value="create">
+					<input type="hidden" name="screen" value="<?php echo esc_attr( $screen_key ); ?>">
+					<?php wp_nonce_field( self::SET_NONCE ); ?>
+					<input type="text" name="label" class="regular-text" placeholder="<?php esc_attr_e( 'New view name…', 'columnkit' ); ?>" required>
+					<button type="submit" class="button"><?php esc_html_e( 'Add view', 'columnkit' ); ?></button>
+				</form>
+
+				<form method="post" action="<?php echo esc_url( $post_url ); ?>" class="ck-set-form">
+					<input type="hidden" name="action" value="<?php echo esc_attr( self::SET_ACTION ); ?>">
+					<input type="hidden" name="op" value="rename">
+					<input type="hidden" name="screen" value="<?php echo esc_attr( $screen_key ); ?>">
+					<input type="hidden" name="set" value="<?php echo esc_attr( $active_set ); ?>">
+					<?php wp_nonce_field( self::SET_NONCE ); ?>
+					<input type="text" name="label" class="regular-text" value="<?php echo esc_attr( $sets[ $active_set ] ?? '' ); ?>" aria-label="<?php esc_attr_e( 'Rename current view', 'columnkit' ); ?>">
+					<button type="submit" class="button"><?php esc_html_e( 'Rename', 'columnkit' ); ?></button>
+				</form>
+
+				<form method="post" action="<?php echo esc_url( $post_url ); ?>" class="ck-set-form">
+					<input type="hidden" name="action" value="<?php echo esc_attr( self::SET_ACTION ); ?>">
+					<input type="hidden" name="op" value="duplicate">
+					<input type="hidden" name="screen" value="<?php echo esc_attr( $screen_key ); ?>">
+					<input type="hidden" name="set" value="<?php echo esc_attr( $active_set ); ?>">
+					<?php wp_nonce_field( self::SET_NONCE ); ?>
+					<button type="submit" class="button"><?php esc_html_e( 'Duplicate', 'columnkit' ); ?></button>
+				</form>
+
+				<?php if ( $active_set !== SettingsRepository::DEFAULT_SET ) : ?>
+					<form method="post" action="<?php echo esc_url( $post_url ); ?>" class="ck-set-form ck-set-delete" onsubmit="return confirm('<?php echo esc_js( __( 'Delete this view? Its columns will be removed.', 'columnkit' ) ); ?>');">
+						<input type="hidden" name="action" value="<?php echo esc_attr( self::SET_ACTION ); ?>">
+						<input type="hidden" name="op" value="delete">
+						<input type="hidden" name="screen" value="<?php echo esc_attr( $screen_key ); ?>">
+						<input type="hidden" name="set" value="<?php echo esc_attr( $active_set ); ?>">
+						<?php wp_nonce_field( self::SET_NONCE ); ?>
+						<button type="submit" class="button button-link-delete"><?php esc_html_e( 'Delete view', 'columnkit' ); ?></button>
+					</form>
+				<?php endif; ?>
+			</div>
+		</div>
+		<?php
+	}
+
+	/**
 	 * Flash messages from import/export. Only whitelisted message codes are rendered — free-text
 	 * GET params must never reach a trusted admin notice, even escaped, or a crafted link could
 	 * plant arbitrary instructions ("Your site is at risk, go to ...") inside wp-admin chrome.
@@ -137,6 +215,17 @@ final class SettingsPage {
 				$count
 			);
 			printf( '<div class="notice notice-success is-dismissible"><p>%s</p></div>', esc_html( $msg ) );
+			return;
+		}
+
+		$notices = [
+			'view_created'    => [ 'success', __( 'View created.', 'columnkit' ) ],
+			'view_renamed'    => [ 'success', __( 'View renamed.', 'columnkit' ) ],
+			'view_duplicated' => [ 'success', __( 'View duplicated.', 'columnkit' ) ],
+			'view_deleted'    => [ 'success', __( 'View deleted.', 'columnkit' ) ],
+		];
+		if ( isset( $notices[ $code ] ) ) {
+			printf( '<div class="notice notice-%s is-dismissible"><p>%s</p></div>', esc_attr( $notices[ $code ][0] ), esc_html( $notices[ $code ][1] ) );
 			return;
 		}
 
@@ -262,22 +351,87 @@ final class SettingsPage {
 			wp_die( esc_html__( 'Unknown screen.', 'columnkit' ), '', [ 'response' => 400 ] );
 		}
 
+		$set_id = isset( $_POST['set'] ) && is_string( $_POST['set'] ) ? SettingsRepository::sanitize_set_id( wp_unslash( $_POST['set'] ) ) : SettingsRepository::DEFAULT_SET;
+
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce checked above.
 		$raw_columns = isset( $_POST['columns'] ) ? wp_unslash( $_POST['columns'] ) : [];
 		$sanitizer   = new Sanitizer( $this->registry );
 		$clean       = $sanitizer->sanitize_columns( $raw_columns, $screen_key );
 
-		$this->repository->save( $screen_key, $clean );
+		// Preserve the set's label; create it if this is the first save to a brand-new id.
+		$sets  = $this->repository->get_sets( $screen_key );
+		$label = $sets[ $set_id ] ?? ( $set_id === SettingsRepository::DEFAULT_SET ? 'Default' : $set_id );
+		$this->repository->save_set( $screen_key, $set_id, (string) $label, $clean );
 
-		$redirect = add_query_arg(
+		$this->redirect_to_set( $screen_key, $set_id, [ 'updated' => '1' ] );
+	}
+
+	/** Create / rename / duplicate / delete a column set. */
+	public function handle_set_action(): void {
+		if ( ! current_user_can( self::CAPABILITY ) ) {
+			wp_die( esc_html__( 'You do not have permission to do this.', 'columnkit' ), '', [ 'response' => 403 ] );
+		}
+		check_admin_referer( self::SET_NONCE );
+
+		$screen_key = isset( $_POST['screen'] ) && is_string( $_POST['screen'] ) ? sanitize_text_field( wp_unslash( $_POST['screen'] ) ) : '';
+		$screens    = ScreenIdentifier::available_screens();
+		if ( ! isset( $screens[ $screen_key ] ) ) {
+			wp_die( esc_html__( 'Unknown screen.', 'columnkit' ), '', [ 'response' => 400 ] );
+		}
+
+		$op     = isset( $_POST['op'] ) && is_string( $_POST['op'] ) ? sanitize_key( wp_unslash( $_POST['op'] ) ) : '';
+		$set_id = isset( $_POST['set'] ) && is_string( $_POST['set'] ) ? SettingsRepository::sanitize_set_id( wp_unslash( $_POST['set'] ) ) : SettingsRepository::DEFAULT_SET;
+		$label  = isset( $_POST['label'] ) && is_string( $_POST['label'] ) ? sanitize_text_field( wp_unslash( $_POST['label'] ) ) : '';
+
+		switch ( $op ) {
+			case 'create':
+				$new_id = $this->repository->generate_set_id( $screen_key );
+				$this->repository->save_set( $screen_key, $new_id, $label !== '' ? $label : __( 'New view', 'columnkit' ), [] );
+				$this->redirect_to_set( $screen_key, $new_id, [ 'ck_msg' => 'view_created' ] );
+				break;
+
+			case 'rename':
+				if ( $label === '' ) {
+					$label = $set_id === SettingsRepository::DEFAULT_SET ? 'Default' : $set_id;
+				}
+				$columns = $this->repository->get_columns( $screen_key, $set_id );
+				$this->repository->save_set( $screen_key, $set_id, $label, $columns );
+				$this->redirect_to_set( $screen_key, $set_id, [ 'ck_msg' => 'view_renamed' ] );
+				break;
+
+			case 'duplicate':
+				$columns = $this->repository->get_columns( $screen_key, $set_id );
+				$sets    = $this->repository->get_sets( $screen_key );
+				$src     = $sets[ $set_id ] ?? 'Default';
+				$new_id  = $this->repository->generate_set_id( $screen_key );
+				/* translators: %s: source view name */
+				$this->repository->save_set( $screen_key, $new_id, sprintf( __( '%s (copy)', 'columnkit' ), $src ), $columns );
+				$this->redirect_to_set( $screen_key, $new_id, [ 'ck_msg' => 'view_duplicated' ] );
+				break;
+
+			case 'delete':
+				$this->repository->delete_set( $screen_key, $set_id );
+				$this->redirect_to_set( $screen_key, SettingsRepository::DEFAULT_SET, [ 'ck_msg' => 'view_deleted' ] );
+				break;
+
+			default:
+				wp_die( esc_html__( 'Unknown action.', 'columnkit' ), '', [ 'response' => 400 ] );
+		}
+	}
+
+	/**
+	 * @param array<string, string> $extra
+	 */
+	private function redirect_to_set( string $screen_key, string $set_id, array $extra = [] ): void {
+		$args = array_merge(
 			[
-				'page'    => self::MENU_SLUG,
-				'screen'  => $screen_key,
-				'updated' => '1',
+				'page'   => self::MENU_SLUG,
+				'screen' => $screen_key,
+				'set'    => $set_id,
 			],
-			admin_url( 'options-general.php' )
+			$extra
 		);
-		wp_safe_redirect( $redirect );
+		wp_safe_redirect( add_query_arg( $args, admin_url( 'options-general.php' ) ) );
 		exit;
 	}
 }
