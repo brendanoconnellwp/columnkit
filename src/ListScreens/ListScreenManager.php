@@ -22,12 +22,15 @@ use ColumnKit\Support\SetResolver;
  *   - Taxonomies:     manage_edit-{tax}_columns (filter) + manage_{tax}_custom_column
  *                     (filter, returns the cell HTML)
  *
- * Sort / filter / inline-edit / export are wired only for post screens (incl. media) in v1.
- * User and term sort/filter would require pre_user_query / get_terms_args — deferred.
+ * Posts/Media get the full set: sort, filter, inline-edit, bulk-edit, export.
+ * Users get meta sort (pre_get_users), inline-edit, and export (UserListManager).
+ * Terms get meta sort (get_terms_args), inline-edit, and export (TermListManager). Term
+ * filtering is the one gap — edit-tags.php has no native hook to render a filter bar.
  */
 final class ListScreenManager {
 	private ?string $active_screen_key = null;
 	private string  $active_post_type  = '';
+	private string  $active_object     = 'post'; // post | user | term
 	private string  $active_set_id     = SettingsRepository::DEFAULT_SET;
 
 	/** @var array<int, array<string, mixed>> Currently-applied column definitions for this request. */
@@ -39,7 +42,9 @@ final class ListScreenManager {
 		private SortManager $sort_manager,
 		private FilterManager $filter_manager,
 		private EditManager $edit_manager,
-		private DataExporter $data_exporter
+		private DataExporter $data_exporter,
+		private UserListManager $user_list_manager,
+		private TermListManager $term_list_manager
 	) {}
 
 	public function active_post_type(): string {
@@ -86,17 +91,21 @@ final class ListScreenManager {
 
 		// Dispatch by screen kind.
 		if ( ScreenIdentifier::is_users( $screen_key ) ) {
+			$this->active_object = 'user';
 			add_filter( 'manage_users_columns',       [ $this, 'filter_columns' ], 20 );
 			add_filter( 'manage_users_custom_column', [ $this, 'filter_user_or_term_cell' ], 10, 3 );
 			add_action( 'restrict_manage_users',      [ $this, 'render_user_view_switcher' ], 5, 1 );
-			return; // No sort/filter/edit/export on users in v1.
+			$this->user_list_manager->activate( $screen_key, $columns );
+			return;
 		}
 
 		$taxonomy = ScreenIdentifier::taxonomy( $screen_key );
 		if ( $taxonomy !== null ) {
+			$this->active_object = 'term';
 			add_filter( "manage_edit-{$taxonomy}_columns",   [ $this, 'filter_columns' ], 20 );
 			add_filter( "manage_{$taxonomy}_custom_column", [ $this, 'filter_user_or_term_cell' ], 10, 3 );
-			return; // No sort/filter/edit/export on terms in v1.
+			$this->term_list_manager->activate( $screen_key, $taxonomy, $columns );
+			return;
 		}
 
 		if ( ScreenIdentifier::is_media( $screen_key ) ) {
@@ -127,6 +136,11 @@ final class ListScreenManager {
 	/** The set the current viewer is looking at. */
 	public function active_set_id(): string {
 		return $this->active_set_id;
+	}
+
+	/** Internal screen key for the current list table, or '' if none active. */
+	public function active_screen_key(): string {
+		return $this->active_screen_key ?? '';
 	}
 
 	/**
@@ -298,7 +312,28 @@ final class ListScreenManager {
 			}
 			$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
 			$format   = is_array( $entry['format'] ?? null ) ? $entry['format'] : [];
-			return ColumnPresenter::format( (string) $col->render( $object_id, $settings ), $format );
+			$html     = ColumnPresenter::format( (string) $col->render( $object_id, $settings ), $format );
+
+			if ( $col instanceof EditableColumn && Editability::is_editable( $col, $settings ) ) {
+				$raw          = $col->get_raw_value( $object_id, $settings );
+				$input_type   = $col->get_edit_input_type( $settings );
+				$options      = $col->get_edit_options( $settings );
+				$options_attr = '';
+				if ( is_array( $options ) && $options !== [] ) {
+					$options_attr = ' data-ck-options="' . esc_attr( (string) wp_json_encode( $options ) ) . '"';
+				}
+				return sprintf(
+					'<span class="ck-cell ck-editable" data-ck-col="%s" data-ck-object="%s" data-ck-id="%d" data-ck-input="%s"%s data-ck-raw="%s">%s</span>',
+					esc_attr( $id ),
+					esc_attr( $this->active_object ),
+					$object_id,
+					esc_attr( $input_type ),
+					$options_attr,
+					esc_attr( $raw ),
+					$html
+				);
+			}
+			return $html;
 		}
 		return $value;
 	}

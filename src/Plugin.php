@@ -25,6 +25,8 @@ use ColumnKit\ListScreens\EditManager;
 use ColumnKit\ListScreens\FilterManager;
 use ColumnKit\ListScreens\ListScreenManager;
 use ColumnKit\ListScreens\SortManager;
+use ColumnKit\ListScreens\TermListManager;
+use ColumnKit\ListScreens\UserListManager;
 use ColumnKit\Settings\SettingsRepository;
 
 final class Plugin {
@@ -37,6 +39,8 @@ final class Plugin {
 	private Assets $assets;
 	private DataExporter $data_exporter;
 	private SettingsExporter $settings_exporter;
+	private UserListManager $user_list_manager;
+	private TermListManager $term_list_manager;
 
 	public static function instance(): self {
 		return self::$instance ??= new self();
@@ -47,13 +51,17 @@ final class Plugin {
 		$this->repository        = new SettingsRepository();
 		$this->data_exporter     = new DataExporter( $this->registry, $this->repository );
 		$this->settings_exporter = new SettingsExporter( $this->registry, $this->repository );
+		$this->user_list_manager = new UserListManager( $this->registry, $this->repository );
+		$this->term_list_manager = new TermListManager( $this->registry, $this->repository );
 		$this->list_screen_manager = new ListScreenManager(
 			$this->registry,
 			$this->repository,
 			new SortManager( $this->registry ),
 			new FilterManager( $this->registry ),
 			new EditManager( $this->registry, $this->repository ),
-			$this->data_exporter
+			$this->data_exporter,
+			$this->user_list_manager,
+			$this->term_list_manager
 		);
 		$this->settings_page = new SettingsPage(
 			$this->registry,
@@ -72,6 +80,8 @@ final class Plugin {
 		// which doesn't define WP_ADMIN.)
 		$this->data_exporter->register_hooks();
 		$this->settings_exporter->register_hooks();
+		$this->user_list_manager->register_hooks();
+		$this->term_list_manager->register_hooks();
 
 		if ( is_admin() ) {
 			$this->settings_page->register_hooks();

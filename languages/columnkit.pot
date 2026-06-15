@@ -780,3 +780,29 @@ msgstr ""
 #: src/Columns/PostMetaColumn.php
 msgid "Controls sorting, the inline-edit input, and how the value is displayed."
 msgstr ""
+
+# --- 0.6.0: Users + Taxonomies parity ---
+
+#: src/Columns/UserMetaColumn.php
+msgid "Show, sort, and inline-edit the value of a user meta key."
+msgstr ""
+
+#: src/Columns/TermMetaColumn.php
+msgid "Show, sort, and inline-edit the value of a term meta key."
+msgstr ""
+
+#: src/ListScreens/EditManager.php
+msgid "You cannot edit this user."
+msgstr ""
+
+#: src/ListScreens/EditManager.php
+msgid "You cannot edit this term."
+msgstr ""
+
+#: src/ListScreens/EditManager.php
+msgid "Unknown taxonomy."
+msgstr ""
+
+#: src/ListScreens/TermListManager.php
+msgid "Export this term list:"
+msgstr ""

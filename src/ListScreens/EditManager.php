@@ -92,6 +92,14 @@ final class EditManager {
 			wp_send_json_error( [ 'message' => __( 'Invalid security token.', 'columnkit' ) ], 403 );
 		}
 
+		// Users + Terms screens use WP_User_Query / WP_Term_Query, not posts — handled separately
+		// so the well-trodden post path below stays untouched. JS sends `object` only for those.
+		$object = isset( $_POST['object'] ) && is_string( $_POST['object'] ) ? sanitize_key( wp_unslash( $_POST['object'] ) ) : 'post';
+		if ( $object === 'user' || $object === 'term' ) {
+			$this->ajax_save_meta_object( $object );
+			return;
+		}
+
 		$post_id = isset( $_POST['post_id'] ) && is_scalar( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0;
 		$col_id  = isset( $_POST['col_id'] ) && is_string( $_POST['col_id'] ) ? sanitize_key( wp_unslash( $_POST['col_id'] ) ) : '';
 		$set_id  = isset( $_POST['set'] ) && is_string( $_POST['set'] ) ? SettingsRepository::sanitize_set_id( wp_unslash( $_POST['set'] ) ) : SettingsRepository::DEFAULT_SET;
@@ -148,6 +156,68 @@ final class EditManager {
 				'raw'  => $raw,
 			]
 		);
+	}
+
+	/**
+	 * Inline-save for Users and Terms. Same nonce as posts (already verified by the caller),
+	 * but object-specific capability checks and screen resolution.
+	 */
+	private function ajax_save_meta_object( string $object ): void {
+		$object_id = isset( $_POST['object_id'] ) && is_scalar( $_POST['object_id'] ) ? (int) $_POST['object_id'] : 0;
+		$col_id    = isset( $_POST['col_id'] ) && is_string( $_POST['col_id'] ) ? sanitize_key( wp_unslash( $_POST['col_id'] ) ) : '';
+		$set_id    = isset( $_POST['set'] ) && is_string( $_POST['set'] ) ? SettingsRepository::sanitize_set_id( wp_unslash( $_POST['set'] ) ) : SettingsRepository::DEFAULT_SET;
+		$screen    = isset( $_POST['screen'] ) && is_string( $_POST['screen'] ) ? sanitize_text_field( wp_unslash( $_POST['screen'] ) ) : '';
+		$value     = isset( $_POST['value'] ) && is_scalar( $_POST['value'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['value'] ) ) : '';
+
+		if ( $object_id <= 0 || $col_id === '' ) {
+			wp_send_json_error( [ 'message' => __( 'Invalid request.', 'columnkit' ) ], 400 );
+		}
+
+		// Resolve + authorise the screen for this object type.
+		if ( $object === 'user' ) {
+			if ( $screen !== 'users' ) {
+				wp_send_json_error( [ 'message' => __( 'Unknown screen.', 'columnkit' ) ], 400 );
+			}
+			if ( ! current_user_can( 'edit_user', $object_id ) ) {
+				wp_send_json_error( [ 'message' => __( 'You cannot edit this user.', 'columnkit' ) ], 403 );
+			}
+		} else { // term
+			if ( ! str_starts_with( $screen, 'taxonomy:' ) ) {
+				wp_send_json_error( [ 'message' => __( 'Unknown screen.', 'columnkit' ) ], 400 );
+			}
+			$taxonomy = substr( $screen, strlen( 'taxonomy:' ) );
+			if ( ! taxonomy_exists( $taxonomy ) ) {
+				wp_send_json_error( [ 'message' => __( 'Unknown taxonomy.', 'columnkit' ) ], 404 );
+			}
+			if ( ! current_user_can( 'edit_term', $object_id ) ) {
+				wp_send_json_error( [ 'message' => __( 'You cannot edit this term.', 'columnkit' ) ], 403 );
+			}
+		}
+
+		$entry = null;
+		foreach ( $this->repository->get_columns( $screen, $set_id ) as $candidate ) {
+			if ( ( $candidate['id'] ?? '' ) === $col_id ) {
+				$entry = $candidate;
+				break;
+			}
+		}
+		if ( $entry === null ) {
+			wp_send_json_error( [ 'message' => __( 'Column not configured.', 'columnkit' ) ], 404 );
+		}
+
+		$col      = $this->registry->get( (string) ( $entry['type'] ?? '' ) );
+		$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
+		if ( ! $col instanceof EditableColumn || ! Editability::is_editable( $col, $settings ) ) {
+			wp_send_json_error( [ 'message' => __( 'Column is not editable.', 'columnkit' ) ], 400 );
+		}
+
+		$col->save_value( $object_id, $value, $settings );
+
+		$format = is_array( $entry['format'] ?? null ) ? $entry['format'] : [];
+		$html   = \ColumnKit\Support\ColumnPresenter::format( $col->render( $object_id, $settings ), $format );
+		$raw    = $col->get_raw_value( $object_id, $settings );
+
+		wp_send_json_success( [ 'html' => $html, 'raw' => $raw ] );
 	}
 
 	// ------------------------------------------------------------------
