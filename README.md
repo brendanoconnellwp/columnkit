@@ -10,8 +10,11 @@ Built as a six-phase exercise, with security and performance pitfalls documented
 
 | Surface | Feature |
 |---|---|
-| Settings page (`Settings → Admin Columns`) | Pick a screen → add / remove / drag-reorder columns → save |
+| Settings page (`Settings → Admin Columns`) | Pick a screen → choose/create a **view** → searchable **Add column** picker → collapsible, drag-reorderable rows with per-field help and a **Display** panel → save |
+| Column Sets (saved views) | Define multiple named column layouts per screen ("SEO view", "Editorial view"…). Switch between them from a dropdown above the list table; each user's choice is remembered per screen. Inline-edit, bulk-edit, and export follow the active view |
+| Per-column display formatting | Width, text alignment, prefix/suffix, and an optional coloured badge/pill (text + background colour) — set per column in the row's **Display** panel. Prefix/suffix flow through to export |
 | Post / Page / CPT / Media list tables | Custom columns, sortable headers, filter inputs above the table |
+| Users & Taxonomy list tables | Custom columns, **meta-key sortable headers**, **click-to-edit** meta values, and CSV/JSON **export** (term filter bar excepted) |
 | Click any editable cell | Inline-edit popover with type-appropriate input (text/number/date/boolean/select). Saves via AJAX, updates the cell without page reload |
 | Quick-edit pencil on Title / Date / Author cells | Edit core fields without leaving the list |
 | Bulk Edit | WP's native panel with our fields + apply-checkbox per column |
@@ -93,19 +96,24 @@ columnkit/
 
 `ScreenIdentifier::from_screen($wp_screen)` resolves the current screen to one of these. `ListScreenManager::on_current_screen` dispatches to the right hook registration based on the kind.
 
-**Settings storage.** One option per screen, key = `ck_screen_{sanitised_screen_key}`, `autoload=false`. Payload shape:
+**Settings storage.** One option per screen, key = `ck_screen_{sanitised_screen_key}`, `autoload=false`. Columns are organised into named **sets** (saved views); `default` always exists. Payload shape (schema v2):
 
 ```php
 [
-  'schema_version' => 1,
+  'schema_version' => 2,
   'screen_key'     => 'post_type:post',  // original key, since storage rewrites `:` → `_`
-  'columns'        => [
-    [ 'id' => 'col_abc', 'type' => 'post_meta', 'label' => 'Price',
-      'settings' => [ 'meta_key' => '_price', 'value_type' => 'numeric' ], 'width' => '' ],
-    ...
-  ]
+  'sets'           => [
+    'default'  => [ 'label' => 'Default', 'columns' => [ ... ] ],
+    'set_ab12' => [ 'label' => 'SEO view', 'columns' => [
+      [ 'id' => 'col_abc', 'type' => 'post_meta', 'label' => 'Price',
+        'settings' => [ 'meta_key' => '_price', 'value_type' => 'numeric' ], 'width' => '' ],
+      ...
+    ] ],
+  ],
 ]
 ```
+
+Legacy v1 options (a flat `columns` array, no sets) are migrated to v2 transparently on first read — the old list becomes the `default` set — and persisted in the new shape on the next save. `SetResolver` picks which set a viewer sees: `?ck_set=` overrides, otherwise the user's remembered choice (user meta), otherwise `default`.
 
 ### Hook timing
 
@@ -206,9 +214,8 @@ One `PITFALLS-phaseN.md` per phase. Each entry follows the pattern: **What** (th
 Deliberate v1 trade-offs:
 
 - **No custom-field UI on the post edit screen.** Defer to ACF / Meta Box / Pods / soon-to-be-core. The plugin reads / writes existing meta values; the field UI is somebody else's job.
-- **No sort / filter / inline-edit / export on Users + Taxonomies.** WP user/term queries use `WP_User_Query` / `WP_Term_Query`, not `WP_Query`; our managers only hook `pre_get_posts`. Display-only on those screens.
+- **Term *filtering* only.** Users and Taxonomies now support meta sort, inline-edit, and CSV/JSON export (via `WP_User_Query` / `WP_Term_Query`). The one remaining gap is a *filter bar* on the term list — `edit-tags.php` exposes no native hook to render one. Users get role/search filtering from core.
 - **No WooCommerce HPOS Orders columns.** HPOS uses a separate `wc_orders` table with its own list-table mechanics. Products work normally.
-- **No "column sets" or "saved segments"** — AC Pro features that let users save+swap multiple column configurations per screen.
 - **No network-admin settings sync on multisite.** Workaround: export/import JSON on each site.
 - **No comment list-table support.**
 - **No Toolset / Events Calendar / Pods integrations.** ACF + Meta Box + JetEngine + Woo + Yoast cover the user's installed plugins; the rest can be added on the same Loader/FieldColumn pattern.

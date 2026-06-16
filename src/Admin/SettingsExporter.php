@@ -157,16 +157,32 @@ final class SettingsExporter {
 		$imported  = 0;
 		foreach ( $data['screens'] as $screen_key => $screen_data ) {
 			$screen_key = (string) $screen_key;
-			// Only accept post_type:<slug> keys — no writing to arbitrary option names.
-			if ( ! preg_match( '/^post_type:[a-z0-9_\-]+$/i', $screen_key ) ) {
+			// Only accept known screen-key shapes — no writing to arbitrary option names.
+			if ( ! preg_match( '/^(post_type:[a-z0-9_\-]+|media|users|taxonomy:[a-z0-9_\-]+)$/i', $screen_key ) ) {
 				continue;
 			}
-			if ( ! is_array( $screen_data ) || ! isset( $screen_data['columns'] ) || ! is_array( $screen_data['columns'] ) ) {
+			if ( ! is_array( $screen_data ) ) {
 				continue;
 			}
-			$clean = $sanitizer->sanitize_columns( $screen_data['columns'], $screen_key );
-			$this->repository->save( $screen_key, $clean );
-			$imported++;
+
+			if ( isset( $screen_data['sets'] ) && is_array( $screen_data['sets'] ) ) {
+				// v2 payload: import each named set.
+				foreach ( $screen_data['sets'] as $set_id => $set ) {
+					if ( ! is_array( $set ) || ! isset( $set['columns'] ) || ! is_array( $set['columns'] ) ) {
+						continue;
+					}
+					$set_id = SettingsRepository::sanitize_set_id( (string) $set_id );
+					$label  = isset( $set['label'] ) && is_string( $set['label'] ) ? sanitize_text_field( $set['label'] ) : $set_id;
+					$clean  = $sanitizer->sanitize_columns( $set['columns'], $screen_key );
+					$this->repository->save_set( $screen_key, $set_id, $label, $clean );
+				}
+				$imported++;
+			} elseif ( isset( $screen_data['columns'] ) && is_array( $screen_data['columns'] ) ) {
+				// v1 payload: a flat column list becomes the default set.
+				$clean = $sanitizer->sanitize_columns( $screen_data['columns'], $screen_key );
+				$this->repository->save( $screen_key, $clean );
+				$imported++;
+			}
 		}
 		return $imported;
 	}

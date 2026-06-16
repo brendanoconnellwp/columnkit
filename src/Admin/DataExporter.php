@@ -7,6 +7,8 @@ use ColumnKit\ColumnRegistry;
 use ColumnKit\Columns\FilterableColumn;
 use ColumnKit\Columns\SortableColumn;
 use ColumnKit\Settings\SettingsRepository;
+use ColumnKit\Support\ColumnPresenter;
+use ColumnKit\Support\SetResolver;
 use WP_Query;
 
 /**
@@ -107,7 +109,10 @@ final class DataExporter {
 		}
 
 		$screen_key = 'post_type:' . $post_type;
-		$columns    = $this->repository->get_columns( $screen_key );
+		$set_id     = isset( $_GET[ SetResolver::REQUEST_PARAM ] ) && is_string( $_GET[ SetResolver::REQUEST_PARAM ] )
+			? SettingsRepository::sanitize_set_id( wp_unslash( $_GET[ SetResolver::REQUEST_PARAM ] ) )
+			: SettingsRepository::DEFAULT_SET;
+		$columns    = $this->repository->get_columns( $screen_key, $set_id );
 		if ( empty( $columns ) ) {
 			wp_die( esc_html__( 'No columns configured for this screen.', 'columnkit' ), '', [ 'response' => 400 ] );
 		}
@@ -257,7 +262,8 @@ final class DataExporter {
 					continue;
 				}
 				$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
-				$row[]    = $col->get_export_value( $post->ID, $settings );
+				$format   = is_array( $entry['format'] ?? null ) ? $entry['format'] : [];
+				$row[]    = ColumnPresenter::format_export( $col->get_export_value( $post->ID, $settings ), $format );
 			}
 			fputcsv( $out, array_map( [ self::class, 'csv_escape' ], $row ) );
 		}
@@ -283,7 +289,8 @@ final class DataExporter {
 				}
 				$col_id              = (string) ( $col_entry['id'] ?? '' );
 				$settings            = is_array( $col_entry['settings'] ?? null ) ? $col_entry['settings'] : [];
-				$entry[ $col_id ]    = $col->get_export_value( $post->ID, $settings );
+				$format              = is_array( $col_entry['format'] ?? null ) ? $col_entry['format'] : [];
+				$entry[ $col_id ]    = ColumnPresenter::format_export( $col->get_export_value( $post->ID, $settings ), $format );
 			}
 			if ( ! $first ) {
 				echo ',';

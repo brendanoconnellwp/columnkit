@@ -14,7 +14,8 @@ interface ColumnInterface {
 	public function get_description(): string;
 
 	/**
-	 * Per-column settings schema. Each entry: [ 'key' => string, 'label' => string, 'type' => 'text'|'select', 'options' => array|null, 'required' => bool ].
+	 * Per-column settings schema. Each entry: [ 'key' => string, 'label' => string, 'type' => 'text'|'select', 'options' => array|null, 'required' => bool, 'help' => string ].
+	 * 'help' is optional inline guidance shown under the field in the settings UI.
 	 *
 	 * @return array<int, array<string, mixed>>
 	 */

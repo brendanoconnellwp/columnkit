@@ -93,23 +93,28 @@
 	} );
 
 	function openEditor( $cell ) {
-		var $row  = $cell.closest( 'tr' );
-		var rowId = $row.attr( 'id' ) || '';
-		var match = rowId.match( /^post-(\d+)$/ );
-		if ( ! match ) { return; }
+		// Object type + id: our user/term cells carry them explicitly; post cells fall back to
+		// the row id (post-N, or any -N).
+		var objectType = $cell.attr( 'data-ck-object' ) || 'post';
+		var objectId   = parseInt( $cell.attr( 'data-ck-id' ) || '', 10 );
+		if ( ! objectId ) {
+			var m = ( ( $cell.closest( 'tr' ).attr( 'id' ) ) || '' ).match( /-(\d+)$/ );
+			objectId = m ? parseInt( m[1], 10 ) : 0;
+		}
 
 		var ctx = {
-			postId:    parseInt( match[1], 10 ),
-			colId:     $cell.attr( 'data-ck-col' ) || '',
-			value:     $cell.attr( 'data-ck-raw' ) || '',
-			inputType: $cell.attr( 'data-ck-input' ) || 'text',
-			options:   null
+			objectType: objectType,
+			objectId:   objectId,
+			colId:      $cell.attr( 'data-ck-col' ) || '',
+			value:      $cell.attr( 'data-ck-raw' ) || '',
+			inputType:  $cell.attr( 'data-ck-input' ) || 'text',
+			options:    null
 		};
 		var optsJson = $cell.attr( 'data-ck-options' );
 		if ( optsJson ) {
 			try { ctx.options = JSON.parse( optsJson ); } catch ( err ) { ctx.options = null; }
 		}
-		if ( ! ctx.colId || ! ctx.postId ) { return; }
+		if ( ! ctx.colId || ! ctx.objectId ) { return; }
 
 		var $popover = buildPopover( ctx, $cell );
 		$( 'body' ).append( $popover );
@@ -231,17 +236,26 @@
 		var $save   = $popover.find( '.ck-save' ).prop( 'disabled', true );
 		var $input  = $popover.find( '.ck-input' );
 
+		var payload = {
+			action:      CK_INLINE.action || 'ck_inline_save',
+			_ajax_nonce: CK_INLINE.nonce,
+			col_id:      ctx.colId,
+			set:         CK_INLINE.set || 'default',
+			value:       $input.val()
+		};
+		if ( ctx.objectType === 'post' ) {
+			payload.post_id = ctx.objectId;
+		} else {
+			payload.object    = ctx.objectType;
+			payload.object_id = ctx.objectId;
+			payload.screen    = CK_INLINE.screen || '';
+		}
+
 		$.ajax( {
 			url:      CK_INLINE.ajaxUrl,
 			type:     'POST',
 			dataType: 'json',
-			data: {
-				action:      CK_INLINE.action || 'ck_inline_save',
-				_ajax_nonce: CK_INLINE.nonce,
-				post_id:     ctx.postId,
-				col_id:      ctx.colId,
-				value:       $input.val()
-			}
+			data:     payload
 		} ).done( function ( resp ) {
 			if ( resp && resp.success ) {
 				// Preserve our wrapper + edit trigger; only replace the inner display content.
