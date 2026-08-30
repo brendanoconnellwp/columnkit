@@ -9,6 +9,7 @@
  * License:           GPL-2.0-or-later
  * Text Domain:       columnkit
  * Domain Path:       /languages
+ * Update URI:        https://github.com/brendanoconnellwp/columnkit
  */
 
 declare( strict_types=1 );

@@ -20,6 +20,7 @@ Personal plugin for replacing paid SaaS column-management plugins. v0.1 ships Ph
 * Added: per-column display formatting — set width, text alignment, a text prefix/suffix, and an optional coloured badge/pill (text + background colour) per column. Prefix/suffix carry through to CSV/JSON export.
 * Improved: settings page redesign — collapsible column rows with live summaries, a searchable "Add column" picker with type descriptions, per-field inline help, a colour picker for badge colours, and a sticky Save bar.
 * Added: Users & Taxonomies parity — user-meta and term-meta columns are now sortable (by clicking the header), inline-editable (click a cell to edit), and exportable to CSV/JSON, matching the post-screen feature set. (Term filtering is not yet available — WordPress exposes no hook to render a filter bar on the term list.)
+* Added: self-updates from GitHub Releases — sites running 0.6.0+ see the native "update available" notice and can one-click install new releases. For a private repo, define CK_GITHUB_TOKEN in wp-config.php (fine-grained read-only PAT); public repos need no configuration.
 * Changed: per-screen settings storage migrated from a flat column list (schema v1) to named sets (schema v2). Existing configurations migrate automatically on first read; no action required.
 
 = 0.5.3 =

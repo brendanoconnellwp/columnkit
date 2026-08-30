@@ -28,6 +28,7 @@ use ColumnKit\ListScreens\SortManager;
 use ColumnKit\ListScreens\TermListManager;
 use ColumnKit\ListScreens\UserListManager;
 use ColumnKit\Settings\SettingsRepository;
+use ColumnKit\Updater\GitHubUpdater;
 
 final class Plugin {
 	private static ?Plugin $instance = null;
@@ -82,6 +83,10 @@ final class Plugin {
 		$this->settings_exporter->register_hooks();
 		$this->user_list_manager->register_hooks();
 		$this->term_list_manager->register_hooks();
+
+		// Self-updates from GitHub releases. Not is_admin()-gated: wp_update_plugins()
+		// runs from wp-cron too, and the filter must be present there.
+		( new GitHubUpdater() )->register_hooks();
 
 		if ( is_admin() ) {
 			$this->settings_page->register_hooks();
