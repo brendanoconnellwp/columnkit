@@ -27,6 +27,9 @@ if ( ! defined( 'CK_URL' ) ) {
 if ( ! defined( 'CK_BASENAME' ) ) {
 	define( 'CK_BASENAME', 'columnkit/columnkit.php' );
 }
+if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
+	define( 'HOUR_IN_SECONDS', 3600 ); // WP core time constant, used by GitHubUpdater.
+}
 
 // Manual PSR-4 autoloader matching the bootstrap, so tests don't need composer dumpautoload.
 spl_autoload_register( static function ( string $class ): void {

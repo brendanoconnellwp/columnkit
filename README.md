@@ -170,6 +170,34 @@ Implement extra interfaces (`SortableColumn`, `FilterableColumn`, `EditableColum
 
 ---
 
+## Updates on live sites
+
+The plugin self-updates from **GitHub Releases** — no wp.org listing. `columnkit.php` declares
+`Update URI: https://github.com/brendanoconnellwp/columnkit`, and `Updater\GitHubUpdater` answers
+WP core's `update_plugins_github.com` filter: it checks the latest release (cached 6h in a
+transient, failures cached 1h), and when the release version beats the installed one, wp-admin
+shows the native "update available" row and one-click installs the release zip.
+
+**Release process:** bump the version in `columnkit.php` (header + `CK_VERSION` must agree) and
+`readme.txt`, merge to main, then push a tag:
+
+```bash
+git tag v0.6.0 && git push origin v0.6.0
+```
+
+The Release workflow verifies the tag matches the plugin version, builds `columnkit-{v}.zip`
+(dev files excluded, single `columnkit/` folder so in-place upgrades work), and publishes the
+GitHub release. Sites pick it up on the next update check (`wp cron` / visiting the Plugins page;
+force with `wp plugin update --all --dry-run` or "Check again" on Dashboard → Updates).
+
+**Private repo?** Release-asset downloads then need auth: create one fine-grained read-only PAT
+for this repo and add `define( 'CK_GITHUB_TOKEN', '...' );` to each site's `wp-config.php` — the
+updater switches to the authenticated asset API automatically (needs WP 6.2+). If the repo is
+public, no configuration at all. Either way, a site must be running a version that *contains* the
+updater (≥ 0.6.0) before it can see updates — versions ≤ 0.5.3 need one manual zip install.
+
+---
+
 ## Testing
 
 **Unit tests** (PHPUnit + Brain Monkey, no WP load):
