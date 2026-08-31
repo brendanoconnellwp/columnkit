@@ -140,6 +140,12 @@ final class GitHubUpdaterTest extends TestCase {
 		$this->assertSame( 1, $this->http_calls );
 	}
 
+	public function test_flush_transient_clears_cache(): void {
+		$this->transients['ck_github_update'] = [ 'ck_error' => true ];
+		( new GitHubUpdater( '' ) )->flush_transient();
+		$this->assertArrayNotHasKey( 'ck_github_update', $this->transients );
+	}
+
 	public function test_flush_cache_on_plugin_upgrade(): void {
 		$this->transients['ck_github_update'] = [ 'tag_name' => 'v0.6.0' ];
 		$updater = new GitHubUpdater( '' );
