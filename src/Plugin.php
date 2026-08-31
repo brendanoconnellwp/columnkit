@@ -5,6 +5,7 @@ namespace ColumnKit;
 
 use ColumnKit\Admin\Assets;
 use ColumnKit\Admin\DataExporter;
+use ColumnKit\Admin\MetaKeySuggestions;
 use ColumnKit\Admin\SettingsExporter;
 use ColumnKit\Admin\SettingsPage;
 use ColumnKit\Columns\AuthorColumn;
@@ -87,6 +88,10 @@ final class Plugin {
 		// Self-updates from GitHub releases. Not is_admin()-gated: wp_update_plugins()
 		// runs from wp-cron too, and the filter must be present there.
 		( new GitHubUpdater() )->register_hooks();
+
+		// Meta-key suggestions for the settings page (AJAX registers at boot — admin-ajax.php
+		// has its own lifecycle).
+		( new MetaKeySuggestions() )->register_hooks();
 
 		if ( is_admin() ) {
 			$this->settings_page->register_hooks();
