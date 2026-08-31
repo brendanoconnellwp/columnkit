@@ -81,11 +81,38 @@
 		$picker.find( '.ck-picker-empty' ).attr( 'hidden', shown === 0 ? null : 'hidden' );
 	}
 
+	function loadMetaKeys() {
+		var $dl = $( '#ck-meta-keys' );
+		var screen = $dl.attr( 'data-screen' ) || '';
+		if ( ! $dl.length || ! screen || ! CK_I18N || ! CK_I18N.ajaxUrl || ! CK_I18N.metaNonce ) {
+			return;
+		}
+		$.post( CK_I18N.ajaxUrl, {
+			action:      CK_I18N.metaAction || 'ck_meta_keys',
+			_ajax_nonce: CK_I18N.metaNonce,
+			screen:      screen
+		} ).done( function ( resp ) {
+			if ( ! resp || ! resp.success || ! resp.data || ! resp.data.keys ) {
+				return;
+			}
+			var frag = document.createDocumentFragment();
+			resp.data.keys.forEach( function ( key ) {
+				var opt = document.createElement( 'option' );
+				opt.value = key;
+				frag.appendChild( opt );
+			} );
+			$dl.empty();
+			$dl[ 0 ].appendChild( frag );
+		} );
+	}
+
 	function init() {
 		$list         = $( '#ck-columns' );
 		$picker       = $( '.ck-picker' );
 		$pickerSearch = $( '.ck-picker-search' );
 		$addToggle    = $( '.ck-add-toggle' );
+
+		loadMetaKeys();
 
 		if ( $.fn.sortable ) {
 			$list.sortable( {

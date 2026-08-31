@@ -53,6 +53,9 @@ final class Assets {
 				[
 					'removeConfirm' => __( 'Remove this column?', 'columnkit' ),
 					'addedLabel'    => __( 'New column', 'columnkit' ),
+					'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
+					'metaAction'    => \ColumnKit\Admin\MetaKeySuggestions::AJAX_ACTION,
+					'metaNonce'     => wp_create_nonce( \ColumnKit\Admin\MetaKeySuggestions::NONCE ),
 				]
 			);
 			return;
