@@ -136,6 +136,10 @@ final class SettingsPage {
 
 			<?php $this->render_templates(); ?>
 
+			<?php // Filled by admin.js from the ck_meta_keys AJAX endpoint — real meta keys for
+			      // this screen, so Custom Field columns offer pick-from-list instead of typing. ?>
+			<datalist id="ck-meta-keys" data-screen="<?php echo esc_attr( $screen_key ); ?>"></datalist>
+
 			<?php $this->settings_exporter->render_section(); ?>
 		</div>
 		<?php
@@ -397,10 +401,14 @@ final class SettingsPage {
 			}
 			echo '</select>';
 		} else {
+			// Meta-key fields get the shared datalist: pick from keys that exist in the DB,
+			// while free typing stays possible for keys that don't exist yet.
+			$list_attr = $key === 'meta_key' ? ' list="ck-meta-keys" autocomplete="off"' : '';
 			printf(
-				'<input type="text" class="regular-text" name="%s" value="%s">',
+				'<input type="text" class="regular-text" name="%s" value="%s"%s>',
 				esc_attr( $name ),
-				esc_attr( $value )
+				esc_attr( $value ),
+				$list_attr // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static literal.
 			);
 		}
 		echo '</label>';
