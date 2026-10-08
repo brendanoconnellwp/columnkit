@@ -3,9 +3,17 @@ declare( strict_types=1 );
 
 namespace ColumnKit\Columns;
 
+use ColumnKit\Support\ScreenIdentifier;
+use ColumnKit\Support\TermAssigner;
+use WP_Post;
 use WP_Query;
 
-final class TaxonomyColumn extends BaseColumn implements SortableColumn, FilterableColumn {
+/**
+ * Terms of a chosen taxonomy. Sortable (first term name), filterable (term dropdown) and
+ * inline-editable through the shared term checklist (TermAssigner) — the same editor core's
+ * Categories / Tags columns get.
+ */
+final class TaxonomyColumn extends BaseColumn implements SortableColumn, FilterableColumn, InlineOnlyEditable, EditAttributes, ContextualColumn {
 	public function get_type(): string {
 		return 'taxonomy';
 	}
@@ -23,12 +31,38 @@ final class TaxonomyColumn extends BaseColumn implements SortableColumn, Filtera
 	}
 
 	public function settings_fields(): array {
+		$options = [];
+		foreach ( get_taxonomies( [ 'show_ui' => true ], 'objects' ) as $tax ) {
+			$options[ $tax->name ] = sprintf( '%s (%s)', $tax->labels->name, $tax->name );
+		}
+		return $this->fields_with_options( $options );
+	}
+
+	/** Only taxonomies actually registered for this screen's post type. */
+	public function settings_fields_for_screen( string $screen_key ): array {
+		$post_type = ScreenIdentifier::is_media( $screen_key ) ? 'attachment' : (string) ScreenIdentifier::post_type( $screen_key );
+		$options   = [];
+		foreach ( get_object_taxonomies( $post_type, 'objects' ) as $tax ) {
+			if ( $tax->show_ui ) {
+				$options[ $tax->name ] = sprintf( '%s (%s)', $tax->labels->name, $tax->name );
+			}
+		}
+		return $this->fields_with_options( $options );
+	}
+
+	/**
+	 * @param array<string, string> $options
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function fields_with_options( array $options ): array {
 		return [
 			[
 				'key'      => 'taxonomy',
-				'label'    => __( 'Taxonomy slug', 'columnkit' ),
-				'type'     => 'text',
+				'label'    => __( 'Taxonomy', 'columnkit' ),
+				'type'     => 'select',
+				'options'  => $options,
 				'required' => true,
+				'empty'    => __( 'This post type has no taxonomies.', 'columnkit' ),
 			],
 		];
 	}
@@ -52,6 +86,40 @@ final class TaxonomyColumn extends BaseColumn implements SortableColumn, Filtera
 		}
 		$names = array_map( static fn( $t ) => esc_html( $t->name ), $terms );
 		return implode( ', ', $names );
+	}
+
+	// ------------------------------------------------------------------
+	// Inline edit (term checklist)
+	// ------------------------------------------------------------------
+
+	public function get_raw_value( int $object_id, array $settings ): string {
+		$taxonomy = (string) ( $settings['taxonomy'] ?? '' );
+		return ( $taxonomy !== '' && taxonomy_exists( $taxonomy ) ) ? TermAssigner::raw_value( $object_id, $taxonomy ) : '';
+	}
+
+	public function get_edit_input_type( array $settings ): string {
+		return 'terms';
+	}
+
+	public function get_edit_options( array $settings ): ?array {
+		return null; // The term list ships once per page (CK_INLINE.taxonomies), not per cell.
+	}
+
+	public function edit_attributes( array $settings ): array {
+		return [ 'taxonomy' => (string) ( $settings['taxonomy'] ?? '' ) ];
+	}
+
+	public function render_bulk_edit_field( string $input_name, array $settings ): void {
+		// Inline-only: WordPress's own Bulk Edit panel already edits taxonomies.
+	}
+
+	public function save_value( int $post_id, string $raw_value, array $settings ): void {
+		$taxonomy = (string) ( $settings['taxonomy'] ?? '' );
+		$post     = get_post( $post_id );
+		if ( $taxonomy === '' || ! $post instanceof WP_Post ) {
+			return;
+		}
+		TermAssigner::assign( $post, $taxonomy, $raw_value ); // Checks taxonomy + assign_terms.
 	}
 
 	// ------------------------------------------------------------------

@@ -21,6 +21,11 @@ Personal plugin for replacing paid SaaS column-management plugins. v0.1 ships Ph
 * Improved: redesigned column editor — every list screen in a searchable sidebar, a compact table of columns with inline label/width editing, an "Add column" picker grouped by source that lists each ACF / Meta Box / JetEngine field directly (one click adds a configured column), unsaved-changes indicator, Ctrl/⌘+S to save, and a "Reset to WordPress defaults" view action.
 * Added: a "Columns" button next to the title of every list table jumps straight to that screen in the editor; "Manage columns" link on the Plugins screen.
 * Added: "View details" for ColumnKit updates shows the release changelog, and a "Check for updates" link on the Plugins screen re-checks GitHub immediately.
+* Added: inline editing of WordPress's own columns everywhere — posts/pages/CPTs: Title, Date, Author and every taxonomy column (Categories, Tags, custom taxonomies) via a searchable term checklist with "add new" for tag-style taxonomies; taxonomy term lists: Name, Slug, Description; Users: Email and Role (editable roles only, never your own).
+* Added: Featured Image and Taxonomy columns are now inline-editable — the featured image opens the WordPress media library (choose / remove); taxonomy columns use the same term checklist.
+* Fixed: Title inline edit never appeared on WordPress 7.x, where the title cell is a <th>; the edit pencil now shows whenever you hover a row instead of only the exact cell. The column editor marks inline-editable columns with a pencil.
+* Changed: the Taxonomy column's setting is now a dropdown of the taxonomies registered for that post type (it was a free-text slug, so a typo silently produced an empty column).
+* Fixed: misaligned + icons on "New view" / "Add column".
 * Fixed: sorting a user or term list by a meta column hid every row without a value (WordPress's meta_key sort is an INNER JOIN). Sorting now keeps them; number fields sort numerically.
 * Dev: bumping the version in columnkit.php on main now publishes the GitHub release automatically.
 

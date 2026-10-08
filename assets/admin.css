@@ -834,3 +834,42 @@
 	font-size: 12px;
 	font-weight: 600;
 }
+
+/* ---------------------------------------------------------------- Icon buttons
+ * Dashicons inside WP buttons sit on the text baseline by default, so "+ New view",
+ * "+ Add column" etc. looked a few px off. Flex-centre icon + label instead. */
+
+.ck-wrap .button.ck-tools-toggle,
+.ck-wrap .button.ck-open-list,
+.ck-wrap .button.ck-add-toggle,
+.ck-wrap .ck-menu > summary.button {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.ck-wrap .button .dashicons,
+.ck-wrap .ck-menu > summary .dashicons {
+	width: 16px;
+	height: 16px;
+	margin: 0;
+	font-size: 16px;
+	line-height: 1;
+	vertical-align: middle;
+}
+
+.ck-wrap .ck-view-actions > summary.button {
+	justify-content: center;
+	min-width: 30px;
+	padding: 0 6px;
+}
+
+.ck-editable-hint {
+	flex-shrink: 0;
+	width: 16px;
+	height: 16px;
+	color: var(--ck-accent);
+	font-size: 14px;
+	line-height: 16px;
+	opacity: 0.7;
+}

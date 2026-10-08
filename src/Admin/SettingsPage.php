@@ -171,7 +171,7 @@ final class SettingsPage {
 								<?php
 								foreach ( $rows as $i => $row ) {
 									if ( $row['kind'] === 'native' ) {
-										$this->render_native_row( (int) $i, $row['key'], $row['default'], $row['cfg'] );
+										$this->render_native_row( (int) $i, $row['key'], $row['default'], $row['cfg'], self::native_editable( $screen_key, $row['key'] ) );
 									} else {
 										$this->render_column_row( (int) $i, $row['entry'], $screen_key );
 									}
@@ -429,7 +429,7 @@ final class SettingsPage {
 	 *
 	 * @param array<string, mixed> $cfg
 	 */
-	private function render_native_row( int $index, string $key, string $default_label, array $cfg ): void {
+	private function render_native_row( int $index, string $key, string $default_label, array $cfg, bool $editable = false ): void {
 		$prefix = 'columns[' . $index . ']';
 		$label  = (string) ( $cfg['label'] ?? '' );
 		$hidden = ! empty( $cfg['hidden'] );
@@ -446,7 +446,10 @@ final class SettingsPage {
 					<input type="text" id="ck-native-<?php echo esc_attr( $key ); ?>" class="ck-inline-input ck-label-input" name="<?php echo esc_attr( $prefix ); ?>[label]"
 						value="<?php echo esc_attr( $label ); ?>" placeholder="<?php echo esc_attr( $default_label ); ?>">
 				</span>
-				<span class="ck-cell-type"><span class="ck-badge ck-badge--wp"><?php esc_html_e( 'WordPress', 'columnkit' ); ?></span></span>
+				<span class="ck-cell-type">
+					<span class="ck-badge ck-badge--wp"><?php esc_html_e( 'WordPress', 'columnkit' ); ?></span>
+					<?php $this->render_editable_hint( $editable ); ?>
+				</span>
 				<span class="ck-cell-width">
 					<input type="text" class="ck-inline-input ck-width-input" name="<?php echo esc_attr( $prefix ); ?>[width]" value="<?php echo esc_attr( $width ); ?>" placeholder="<?php esc_attr_e( 'auto', 'columnkit' ); ?>" aria-label="<?php esc_attr_e( 'Width', 'columnkit' ); ?>">
 				</span>
@@ -495,6 +498,7 @@ final class SettingsPage {
 				</span>
 				<span class="ck-cell-type">
 					<span class="ck-badge ck-badge--<?php echo esc_attr( sanitize_html_class( strtolower( $group['slug'] ) ) ); ?>"><?php echo esc_html( $col->get_label() ); ?></span>
+					<?php $this->render_editable_hint( \ColumnKit\Support\Editability::is_editable( $col, $settings ) ); ?>
 					<span class="ck-type-detail"></span>
 				</span>
 				<span class="ck-cell-width">
@@ -524,6 +528,31 @@ final class SettingsPage {
 			</div>
 		</div>
 		<?php
+	}
+
+	/** Small pencil marking a column whose cells can be edited inline on the list table. */
+	private function render_editable_hint( bool $editable ): void {
+		if ( ! $editable ) {
+			return;
+		}
+		printf(
+			'<span class="ck-editable-hint dashicons dashicons-edit" title="%1$s" aria-label="%1$s"></span>',
+			esc_attr__( 'Editable inline on the list', 'columnkit' )
+		);
+	}
+
+	/** Whether WordPress's own column `$key` on this screen is inline-editable (CoreFields). */
+	private static function native_editable( string $screen_key, string $key ): bool {
+		if ( ScreenIdentifier::is_users( $screen_key ) ) {
+			return in_array( $key, [ 'email', 'role' ], true );
+		}
+		if ( ScreenIdentifier::taxonomy( $screen_key ) !== null ) {
+			return in_array( $key, [ 'name', 'slug', 'description' ], true );
+		}
+		if ( ScreenIdentifier::post_type( $screen_key ) !== null ) {
+			return in_array( $key, [ 'title', 'date', 'author', 'categories', 'tags' ], true ) || str_starts_with( $key, 'taxonomy-' );
+		}
+		return false;
 	}
 
 	/** @return array<int, array<string, mixed>> */

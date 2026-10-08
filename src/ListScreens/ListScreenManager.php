@@ -360,6 +360,7 @@ final class ListScreenManager {
 				if ( is_array( $options ) && $options !== [] ) {
 					$options_attr = ' data-ck-options="' . esc_attr( (string) wp_json_encode( $options ) ) . '"';
 				}
+				$options_attr .= self::extra_edit_attrs( $col, $settings );
 				printf(
 					'<span class="ck-cell ck-editable" data-ck-col="%s" data-ck-input="%s"%s data-ck-raw="%s">%s</span>',
 					esc_attr( $id ),
@@ -405,6 +406,7 @@ final class ListScreenManager {
 				if ( is_array( $options ) && $options !== [] ) {
 					$options_attr = ' data-ck-options="' . esc_attr( (string) wp_json_encode( $options ) ) . '"';
 				}
+				$options_attr .= self::extra_edit_attrs( $col, $settings );
 				return sprintf(
 					'<span class="ck-cell ck-editable" data-ck-col="%s" data-ck-object="%s" data-ck-id="%d" data-ck-input="%s"%s data-ck-raw="%s">%s</span>',
 					esc_attr( $id ),
@@ -419,6 +421,25 @@ final class ListScreenManager {
 			return $html;
 		}
 		return $value;
+	}
+
+	/**
+	 * data-ck-* attributes a column asks for (EditAttributes), already escaped.
+	 *
+	 * @param array<string, mixed> $settings
+	 */
+	private static function extra_edit_attrs( object $col, array $settings ): string {
+		if ( ! $col instanceof \ColumnKit\Columns\EditAttributes ) {
+			return '';
+		}
+		$out = '';
+		foreach ( $col->edit_attributes( $settings ) as $key => $value ) {
+			$key = preg_replace( '/[^a-z0-9-]/', '', strtolower( (string) $key ) );
+			if ( $key !== '' ) {
+				$out .= ' data-ck-' . $key . '="' . esc_attr( (string) $value ) . '"';
+			}
+		}
+		return $out;
 	}
 
 	/**
