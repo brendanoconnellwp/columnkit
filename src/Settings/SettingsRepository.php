@@ -29,6 +29,9 @@ namespace ColumnKit\Settings;
  * it (a plugin activated later) is appended rather than hidden. `columns` never contains
  * built-in columns, so every consumer of get_columns() keeps seeing custom columns only.
  *
+ * Optional per-set `roles` (non-default sets only): role slugs allowed to see the view. Empty
+ * or absent = everyone. SetResolver applies it; users of a listed role get that view by default.
+ *
  * Backwards compatibility: schema v1 stored a flat `columns` array with no sets. get()
  * migrates v1 payloads to v2 in memory on read (wrapping the old list into the `default`
  * set); the migrated shape is persisted on the next save(), never during a read request.
@@ -101,6 +104,55 @@ final class SettingsRepository {
 		return isset( $set['layout'] ) && is_array( $set['layout'] ) ? $set['layout'] : [];
 	}
 
+	/**
+	 * Roles allowed to see a set ([] = everyone). The default set is always visible to everyone.
+	 *
+	 * @return array<int, string>
+	 */
+	public function get_roles( string $screen_key, string $set_id ): array {
+		if ( $set_id === self::DEFAULT_SET ) {
+			return [];
+		}
+		$set = $this->get( $screen_key )['sets'][ $set_id ] ?? [];
+		return isset( $set['roles'] ) && is_array( $set['roles'] ) ? array_values( array_map( 'strval', $set['roles'] ) ) : [];
+	}
+
+	/**
+	 * Restrict a (non-default) set to roles. Unknown role slugs are dropped.
+	 *
+	 * @param array<int, string> $roles
+	 */
+	public function set_roles( string $screen_key, string $set_id, array $roles ): void {
+		$set_id  = self::sanitize_set_id( $set_id );
+		$payload = $this->get( $screen_key );
+		if ( $set_id === self::DEFAULT_SET || ! isset( $payload['sets'][ $set_id ] ) ) {
+			return;
+		}
+		$clean = self::sanitize_roles( $roles );
+		if ( $clean === [] ) {
+			unset( $payload['sets'][ $set_id ]['roles'] );
+		} else {
+			$payload['sets'][ $set_id ]['roles'] = $clean;
+		}
+		$this->persist( $screen_key, $payload );
+	}
+
+	/**
+	 * @param array<int|string, mixed> $roles
+	 * @return array<int, string>
+	 */
+	public static function sanitize_roles( array $roles ): array {
+		$known = function_exists( 'wp_roles' ) ? array_keys( wp_roles()->get_names() ) : [];
+		$out   = [];
+		foreach ( $roles as $role ) {
+			$role = is_scalar( $role ) ? sanitize_key( (string) $role ) : '';
+			if ( $role !== '' && in_array( $role, $known, true ) && ! in_array( $role, $out, true ) ) {
+				$out[] = $role;
+			}
+		}
+		return $out;
+	}
+
 	public function set_exists( string $screen_key, string $set_id ): bool {
 		return isset( $this->get( $screen_key )['sets'][ $set_id ] );
 	}
@@ -124,6 +176,11 @@ final class SettingsRepository {
 		];
 		if ( $layout !== [] ) {
 			$set['layout'] = $layout;
+		}
+		// Role restriction is managed separately (set_roles) — carry it across column saves.
+		$roles = $payload['sets'][ $set_id ]['roles'] ?? [];
+		if ( $set_id !== self::DEFAULT_SET && is_array( $roles ) && $roles !== [] ) {
+			$set['roles'] = $roles;
 		}
 		$payload['sets'][ $set_id ] = $set;
 		$this->persist( $screen_key, $payload );
@@ -252,6 +309,9 @@ final class SettingsRepository {
 				$sets[ $id ] = [ 'label' => $label, 'columns' => $columns ];
 				if ( isset( $set['layout'] ) && is_array( $set['layout'] ) && $set['layout'] !== [] ) {
 					$sets[ $id ]['layout'] = $set['layout'];
+				}
+				if ( $id !== self::DEFAULT_SET && isset( $set['roles'] ) && is_array( $set['roles'] ) && $set['roles'] !== [] ) {
+					$sets[ $id ]['roles'] = array_values( array_map( 'strval', $set['roles'] ) );
 				}
 			}
 		} elseif ( isset( $option['columns'] ) && is_array( $option['columns'] ) ) {

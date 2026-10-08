@@ -26,6 +26,9 @@ Personal plugin for replacing paid SaaS column-management plugins. v0.1 ships Ph
 * Fixed: Title inline edit never appeared on WordPress 7.x, where the title cell is a <th>; the edit pencil now shows whenever you hover a row instead of only the exact cell. The column editor marks inline-editable columns with a pencil.
 * Changed: the Taxonomy column's setting is now a dropdown of the taxonomies registered for that post type (it was a free-text slug, so a typo silently produced an empty column).
 * Fixed: misaligned + icons on "New view" / "Add column".
+* Added: 12 new column types for posts, pages and CPTs — Status, Slug, Excerpt (with a muted content preview when missing, plus a "missing excerpt" filter), Word count / Reading time, Last modified, Modified by, Permalink, Parent, Order, Template, Attachments / child-page count, Sticky and Comments open. Each is sortable where it makes sense; Status, Slug, Excerpt, Parent, Order, Template, Sticky and Comments open are inline-editable (with the same permission rules as core).
+* Added: role-restricted views — limit a view to roles (e.g. Editors). Those users land on it automatically; everyone else never sees it, and it's enforced for inline edits and exports too. Admins see every view.
+* Fixed: a user with no remembered view always got the default view, skipping the role-based pick.
 * Fixed: sorting a user or term list by a meta column hid every row without a value (WordPress's meta_key sort is an INNER JOIN). Sorting now keeps them; number fields sort numerically.
 * Dev: bumping the version in columnkit.php on main now publishes the GitHub release automatically.
 

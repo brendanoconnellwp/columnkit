@@ -326,10 +326,13 @@ final class SettingsPage {
 		<div class="ck-views">
 			<span class="ck-views-label"><?php esc_html_e( 'Views', 'columnkit' ); ?></span>
 			<nav class="ck-view-pills" aria-label="<?php esc_attr_e( 'Column views', 'columnkit' ); ?>">
-				<?php foreach ( $sets as $id => $label ) : ?>
+				<?php foreach ( $sets as $id => $label ) :
+					$roles = $this->repository->get_roles( $screen_key, (string) $id );
+					?>
 					<a class="ck-pill<?php echo $id === $active_set ? ' is-active' : ''; ?>"
 						href="<?php echo esc_url( self::url( [ 'screen' => $screen_key, 'set' => $id ] ) ); ?>"
-						<?php echo $id === $active_set ? 'aria-current="true"' : ''; ?>><?php echo esc_html( $label ); ?></a>
+						<?php if ( $roles !== [] ) : ?>title="<?php echo esc_attr( sprintf( /* translators: %s: comma-separated role names */ __( 'Visible to: %s', 'columnkit' ), implode( ', ', self::role_names( $roles ) ) ) ); ?>"<?php endif; ?>
+						<?php echo $id === $active_set ? 'aria-current="true"' : ''; ?>><?php if ( $roles !== [] ) : ?><span class="dashicons dashicons-lock" aria-hidden="true"></span><?php endif; ?><?php echo esc_html( $label ); ?></a>
 				<?php endforeach; ?>
 			</nav>
 
@@ -353,6 +356,21 @@ final class SettingsPage {
 						<input type="text" id="ck-rename-view" name="label" value="<?php echo esc_attr( $sets[ $active_set ] ?? '' ); ?>">
 						<button type="submit" class="button"><?php esc_html_e( 'Rename', 'columnkit' ); ?></button>
 					</form>
+					<?php if ( $active_set !== SettingsRepository::DEFAULT_SET ) :
+						$allowed = $this->repository->get_roles( $screen_key, $active_set );
+						?>
+						<form method="post" action="<?php echo esc_url( $post_url ); ?>" class="ck-menu-roles">
+							<?php $hidden( 'roles' ); ?>
+							<fieldset>
+								<legend><?php esc_html_e( 'Visible to', 'columnkit' ); ?></legend>
+								<p class="description"><?php esc_html_e( 'Leave all unticked for everyone. Users with a ticked role get this view by default.', 'columnkit' ); ?></p>
+								<?php foreach ( wp_roles()->get_names() as $slug => $name ) : ?>
+									<label><input type="checkbox" name="roles[]" value="<?php echo esc_attr( (string) $slug ); ?>" <?php checked( in_array( (string) $slug, $allowed, true ) ); ?>> <?php echo esc_html( translate_user_role( (string) $name ) ); ?></label>
+								<?php endforeach; ?>
+							</fieldset>
+							<button type="submit" class="button"><?php esc_html_e( 'Save visibility', 'columnkit' ); ?></button>
+						</form>
+					<?php endif; ?>
 					<form method="post" action="<?php echo esc_url( $post_url ); ?>">
 						<?php $hidden( 'duplicate' ); ?>
 						<button type="submit" class="ck-menu-item"><span class="dashicons dashicons-admin-page" aria-hidden="true"></span><?php esc_html_e( 'Duplicate this view', 'columnkit' ); ?></button>
@@ -401,6 +419,7 @@ final class SettingsPage {
 			'view_duplicated' => [ 'success', __( 'View duplicated.', 'columnkit' ) ],
 			'view_deleted'    => [ 'success', __( 'View deleted.', 'columnkit' ) ],
 			'view_reset'      => [ 'success', __( 'View reset to WordPress defaults.', 'columnkit' ) ],
+			'view_roles'      => [ 'success', __( 'View visibility saved.', 'columnkit' ) ],
 		];
 		if ( isset( $notices[ $code ] ) ) {
 			printf( '<div class="notice notice-%s is-dismissible"><p>%s</p></div>', esc_attr( $notices[ $code ][0] ), esc_html( $notices[ $code ][1] ) );
@@ -528,6 +547,15 @@ final class SettingsPage {
 			</div>
 		</div>
 		<?php
+	}
+
+	/**
+	 * @param array<int, string> $roles
+	 * @return array<int, string>
+	 */
+	private static function role_names( array $roles ): array {
+		$names = wp_roles()->get_names();
+		return array_map( static fn( $r ) => isset( $names[ $r ] ) ? translate_user_role( (string) $names[ $r ] ) : $r, $roles );
 	}
 
 	/** Small pencil marking a column whose cells can be edited inline on the list table. */
@@ -948,7 +976,15 @@ final class SettingsPage {
 				$new_id  = $this->repository->generate_set_id( $screen_key );
 				/* translators: %s: source view name */
 				$this->repository->save_set( $screen_key, $new_id, sprintf( __( '%s (copy)', 'columnkit' ), $src ), $columns, $layout );
+				$this->repository->set_roles( $screen_key, $new_id, $this->repository->get_roles( $screen_key, $set_id ) );
 				$this->redirect_to_set( $screen_key, $new_id, [ 'ck_msg' => 'view_duplicated' ] );
+				break;
+
+			case 'roles':
+				// phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce checked above.
+				$roles = isset( $_POST['roles'] ) && is_array( $_POST['roles'] ) ? wp_unslash( $_POST['roles'] ) : [];
+				$this->repository->set_roles( $screen_key, $set_id, $roles );
+				$this->redirect_to_set( $screen_key, $set_id, [ 'ck_msg' => 'view_roles' ] );
 				break;
 
 			case 'reset':

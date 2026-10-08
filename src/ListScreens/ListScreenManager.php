@@ -246,7 +246,7 @@ final class ListScreenManager {
 	 * (filters, search, sort). Only shown when the screen has more than one saved view.
 	 */
 	private function render_view_switcher( string $screen_key ): void {
-		$sets = $this->repository->get_sets( $screen_key );
+		$sets = SetResolver::visible_sets( $this->repository, $screen_key ); // Only views this user may see.
 		if ( count( $sets ) < 2 ) {
 			return;
 		}

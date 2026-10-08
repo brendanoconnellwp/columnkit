@@ -124,6 +124,7 @@ final class EditManager {
 		}
 
 		$screen_key = 'post_type:' . $post->post_type;
+		$set_id     = \ColumnKit\Support\SetResolver::allowed( $this->repository, $screen_key, $set_id );
 		$columns    = $this->repository->get_columns( $screen_key, $set_id );
 		$entry      = null;
 		foreach ( $columns as $candidate ) {
@@ -142,6 +143,10 @@ final class EditManager {
 			wp_send_json_error( [ 'message' => __( 'Column is not editable.', 'columnkit' ) ], 400 );
 		}
 
+		if ( $col->get_edit_input_type( $settings ) === 'textarea' && isset( $_POST['value'] ) && is_scalar( $_POST['value'] ) ) {
+			// Multi-line fields (excerpts): sanitize_text_field() above flattened the newlines.
+			$value = sanitize_textarea_field( wp_unslash( (string) $_POST['value'] ) );
+		}
 		$col->save_value( $post_id, $value, $settings );
 
 		// Re-render the cell (the column's render() returns escaped HTML) and read back the raw value.
@@ -211,7 +216,8 @@ final class EditManager {
 			wp_send_json_success( $result );
 		}
 
-		$entry = null;
+		$set_id = \ColumnKit\Support\SetResolver::allowed( $this->repository, $screen, $set_id ); // Role-restricted views.
+		$entry  = null;
 		foreach ( $this->repository->get_columns( $screen, $set_id ) as $candidate ) {
 			if ( ( $candidate['id'] ?? '' ) === $col_id ) {
 				$entry = $candidate;

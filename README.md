@@ -20,6 +20,8 @@ Built as a six-phase exercise, with security and performance pitfalls documented
 | Bulk Edit | WP's native panel with our fields + apply-checkbox per column |
 | Export buttons above the list | CSV or JSON of the current filtered/sorted view |
 | Settings page | Export/import the full column configuration as JSON |
+| Post-field columns | Status, Slug, Excerpt, Word count / Reading time, Last modified, Modified by, Permalink, Parent, Order, Template, Attachments / children, Sticky, Comments open — sortable, and inline-editable where it makes sense |
+| Role-restricted views | Limit a view to roles; those users get it by default, others never see it |
 | ACF / Meta Box / JetEngine / WooCommerce / Yoast | Auto-detected; their fields show up as available column types when their host plugin is active. ACF / Meta Box / JetEngine fields work on **posts, taxonomy term lists and Users** — the picker only offers fields whose location targets that screen, and they're sortable + inline-editable there |
 
 ---
