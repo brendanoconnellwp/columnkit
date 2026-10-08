@@ -68,25 +68,38 @@ if ( is_wp_error( $t ) ) {
 }
 
 // -----------------------------------------------------------------------------
-// 4. Meta sort wiring (WP_User_Query)
+// 4. Meta sort (WP_User_Query) — LEFT JOIN: users WITHOUT the meta must stay in the list.
 // -----------------------------------------------------------------------------
+// is_admin() gates the sort hooks; give the CLI request an admin screen.
+require_once ABSPATH . 'wp-admin/includes/admin.php';
+set_current_screen( 'dashboard' );
+
+// Back up any real config on these screens so the smoke run doesn't wipe it.
+$backup_users = get_option( 'ck_screen_users' );
+$backup_cat   = get_option( 'ck_screen_taxonomy_category' );
+
 $repo->save_set( 'users', 'default', 'Default', [
 	[ 'id' => 'rank', 'type' => 'user_meta', 'label' => 'Rank', 'settings' => [ 'meta_key' => 'ck_rank' ], 'format' => [] ],
 ] );
 $ulm = new \ColumnKit\ListScreens\UserListManager( $registry, $repo );
 $ulm->activate( 'users', $repo->get_columns( 'users', 'default' ) );
 
-$uq = new WP_User_Query( [ 'fields' => 'ID' ] );
-$uq->set( 'orderby', 'ck_rank' );
-$uq->set( 'order', 'asc' );
-// pre_get_users would normally fire; call apply_sort directly to verify the rewrite.
-$ulm->apply_sort( $uq );
-check( 'user sort sets meta_key', $uq->get( 'meta_key' ) === 'ck_rank' );
-check( 'user sort sets orderby=meta_value', $uq->get( 'orderby' ) === 'meta_value' );
-check( 'user sort order whitelisted to ASC', $uq->get( 'order' ) === 'ASC' );
+$u_ids = [];
+foreach ( [ 'ck_smoke_b' => 'b', 'ck_smoke_a' => 'a', 'ck_smoke_none' => '' ] as $login => $rank ) {
+	$id = username_exists( $login ) ?: wp_insert_user( [ 'user_login' => $login, 'user_pass' => wp_generate_password(), 'user_email' => $login . '@example.test' ] );
+	delete_user_meta( (int) $id, 'ck_rank' );
+	if ( $rank !== '' ) {
+		update_user_meta( (int) $id, 'ck_rank', $rank );
+	}
+	$u_ids[ $login ] = (int) $id;
+}
+$uq  = new WP_User_Query( [ 'include' => array_values( $u_ids ), 'orderby' => 'ck_rank', 'order' => 'asc', 'fields' => 'ID' ] );
+$got = array_map( 'intval', $uq->get_results() );
+check( 'user sort keeps users without the meta', count( $got ) === 3, implode( ',', $got ) );
+check( 'user sort ASC: missing, a, b', $got === [ $u_ids['ck_smoke_none'], $u_ids['ck_smoke_a'], $u_ids['ck_smoke_b'] ], implode( ',', $got ) );
 
 // -----------------------------------------------------------------------------
-// 5. Meta sort wiring (WP_Term_Query via get_terms_args)
+// 5. Meta sort (WP_Term_Query via get_terms_args + terms_clauses) — same LEFT JOIN rule.
 // -----------------------------------------------------------------------------
 $repo->save_set( 'taxonomy:category', 'default', 'Default', [
 	[ 'id' => 'icon', 'type' => 'term_meta', 'label' => 'Icon', 'settings' => [ 'meta_key' => 'ck_icon' ], 'format' => [] ],
@@ -94,21 +107,38 @@ $repo->save_set( 'taxonomy:category', 'default', 'Default', [
 $tlm = new \ColumnKit\ListScreens\TermListManager( $registry, $repo );
 $tlm->activate( 'taxonomy:category', 'category', $repo->get_columns( 'taxonomy:category', 'default' ) );
 
+$t_ids = [];
+foreach ( [ 'ck-smoke-z' => 'zz', 'ck-smoke-y' => 'yy', 'ck-smoke-none' => '' ] as $slug => $icon ) {
+	$existing = get_term_by( 'slug', $slug, 'category' );
+	$tid      = $existing ? (int) $existing->term_id : (int) wp_insert_term( $slug, 'category', [ 'slug' => $slug ] )['term_id'];
+	delete_term_meta( $tid, 'ck_icon' );
+	if ( $icon !== '' ) {
+		update_term_meta( $tid, 'ck_icon', $icon );
+	}
+	$t_ids[ $slug ] = $tid;
+}
 $_GET['orderby'] = 'ck_icon';
 $_GET['order']   = 'desc';
-$args = $tlm->apply_sort( [ 'taxonomy' => [ 'category' ] ], [ 'category' ] );
-check( 'term sort sets meta_key', ( $args['meta_key'] ?? '' ) === 'ck_icon' );
-check( 'term sort sets orderby=meta_value', ( $args['orderby'] ?? '' ) === 'meta_value' );
-check( 'term sort order=DESC', ( $args['order'] ?? '' ) === 'DESC' );
+$terms = array_map( 'intval', (array) get_terms( [ 'taxonomy' => 'category', 'include' => array_values( $t_ids ), 'hide_empty' => false, 'fields' => 'ids' ] ) );
+check( 'term sort keeps terms without the meta', count( $terms ) === 3, implode( ',', $terms ) );
+check( 'term sort DESC: zz, yy, missing', $terms === [ $t_ids['ck-smoke-z'], $t_ids['ck-smoke-y'], $t_ids['ck-smoke-none'] ], implode( ',', $terms ) );
 
 // Non-ck orderby is left alone.
 $_GET['orderby'] = 'name';
 $args2 = $tlm->apply_sort( [ 'taxonomy' => [ 'category' ] ], [ 'category' ] );
-check( 'term sort ignores non-ck orderby', ! isset( $args2['meta_key'] ) );
+check( 'term sort ignores non-ck orderby', ! isset( $args2['ck_sort_mark'] ) );
 
-// Cleanup.
+// Cleanup — remove fixtures, restore the real config.
 $_GET = [];
-$repo->delete( 'users' );
-$repo->delete( 'taxonomy:category' );
+require_once ABSPATH . 'wp-admin/includes/user.php';
+foreach ( $u_ids as $id ) {
+	wp_delete_user( $id );
+}
+foreach ( $t_ids as $tid ) {
+	wp_delete_term( $tid, 'category' );
+}
+\ColumnKit\Settings\SettingsRepository::reset_cache();
+false === $backup_users ? delete_option( 'ck_screen_users' ) : update_option( 'ck_screen_users', $backup_users, false );
+false === $backup_cat ? delete_option( 'ck_screen_taxonomy_category' ) : update_option( 'ck_screen_taxonomy_category', $backup_cat, false );
 
 echo "\n" . ( $pass ? 'ALL PASS' : 'SOME FAILED' ) . "\n";

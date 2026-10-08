@@ -118,6 +118,22 @@ final class Plugin {
 		$this->registry->register( new FeaturedImageColumn() );
 		$this->registry->register( new AuthorColumn() );
 
+		// Post fields WordPress stores but doesn't list (ACP-style extras).
+		$this->registry->register( new Columns\PostStatusColumn() );
+		$this->registry->register( new Columns\PostSlugColumn() );
+		$this->registry->register( new Columns\PostExcerptColumn() );
+		$this->registry->register( new Columns\WordCountColumn() );
+		$this->registry->register( new Columns\PostModifiedColumn() );
+		$this->registry->register( new Columns\ModifiedByColumn() );
+		$this->registry->register( new Columns\PermalinkColumn() );
+		$this->registry->register( new Columns\PostParentColumn() );
+		$this->registry->register( new Columns\MenuOrderColumn() );
+		$this->registry->register( new Columns\PageTemplateColumn() );
+		$this->registry->register( new Columns\ChildCountColumn() );
+		$this->registry->register( new Columns\StickyColumn() );
+		$this->registry->register( new Columns\CommentStatusColumn() );
+		Columns\WordCountColumn::register_hooks();
+
 		// Phase 6: Users + Terms screens.
 		$this->registry->register( new UserMetaColumn() );
 		$this->registry->register( new UserRoleColumn() );

@@ -5,7 +5,11 @@ namespace ColumnKit\Columns;
 
 use WP_Query;
 
-final class FeaturedImageColumn extends BaseColumn implements FilterableColumn {
+/**
+ * Thumbnail of the post's featured image. Filterable (has / has no image) and inline-editable:
+ * clicking the cell opens the WordPress media library to choose or remove the image.
+ */
+final class FeaturedImageColumn extends BaseColumn implements FilterableColumn, InlineOnlyEditable {
 	public function get_type(): string {
 		return 'featured_image';
 	}
@@ -62,6 +66,47 @@ final class FeaturedImageColumn extends BaseColumn implements FilterableColumn {
 				'loading' => 'lazy',
 			]
 		);
+	}
+
+	// ------------------------------------------------------------------
+	// Inline edit — media library picker
+	// ------------------------------------------------------------------
+
+	public function get_raw_value( int $object_id, array $settings ): string {
+		$id = (int) get_post_thumbnail_id( $object_id );
+		return $id > 0 ? (string) $id : '';
+	}
+
+	public function get_edit_input_type( array $settings ): string {
+		return 'media';
+	}
+
+	public function get_edit_options( array $settings ): ?array {
+		return null;
+	}
+
+	public function render_bulk_edit_field( string $input_name, array $settings ): void {
+		// Inline-only: a media picker can't be a single bulk-edit input.
+	}
+
+	/**
+	 * '' or '0' removes the featured image; otherwise the value must be an existing image
+	 * attachment. edit_post on the row is already checked by EditManager.
+	 */
+	public function save_value( int $post_id, string $raw_value, array $settings ): void {
+		$post_type = get_post_type( $post_id );
+		if ( ! $post_type || ! post_type_supports( $post_type, 'thumbnail' ) ) {
+			return;
+		}
+		$attachment_id = (int) $raw_value;
+		if ( $attachment_id <= 0 ) {
+			delete_post_thumbnail( $post_id );
+			return;
+		}
+		if ( get_post_type( $attachment_id ) !== 'attachment' || ! wp_attachment_is_image( $attachment_id ) ) {
+			return;
+		}
+		set_post_thumbnail( $post_id, $attachment_id );
 	}
 
 	// ------------------------------------------------------------------

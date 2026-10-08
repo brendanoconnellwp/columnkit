@@ -174,7 +174,9 @@ final class SettingsExporter {
 					$set_id = SettingsRepository::sanitize_set_id( (string) $set_id );
 					$label  = isset( $set['label'] ) && is_string( $set['label'] ) ? sanitize_text_field( $set['label'] ) : $set_id;
 					$clean  = $sanitizer->sanitize_columns( $set['columns'], $screen_key );
-					$this->repository->save_set( $screen_key, $set_id, $label, $clean );
+					// Layout (column order + built-in column overrides) is whitelisted by save_set().
+					$layout = is_array( $set['layout'] ?? null ) ? $set['layout'] : [];
+					$this->repository->save_set( $screen_key, $set_id, $label, $clean, $layout );
 				}
 				$imported++;
 			} elseif ( isset( $screen_data['columns'] ) && is_array( $screen_data['columns'] ) ) {

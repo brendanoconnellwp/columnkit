@@ -4,6 +4,8 @@ declare( strict_types=1 );
 namespace ColumnKit\Settings;
 
 use ColumnKit\ColumnRegistry;
+use ColumnKit\Columns\ContextualColumn;
+use ColumnKit\Support\ObjectContext;
 
 /**
  * Sanitises the raw column-list payload submitted from the admin form.
@@ -54,6 +56,10 @@ final class Sanitizer {
 
 			$settings_in  = isset( $entry['settings'] ) && is_array( $entry['settings'] ) ? $entry['settings'] : [];
 			$settings_out = $col->sanitize_settings( $settings_in );
+			if ( $screen_key !== null && $col instanceof ContextualColumn ) {
+				// Object context comes from the screen, never from the submitted payload.
+				$settings_out = array_merge( $settings_out, ObjectContext::settings_for_screen( $screen_key ) );
+			}
 
 			$width = isset( $entry['width'] ) ? (string) $entry['width'] : '';
 			$width = preg_replace( '/[^0-9a-z%px]/i', '', $width );

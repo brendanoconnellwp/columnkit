@@ -59,6 +59,10 @@ final class UserMetaColumn extends BaseColumn implements EditableColumn, MetaSor
 		return (string) ( $settings['meta_key'] ?? '' );
 	}
 
+	public function sort_meta_type( array $settings ): string {
+		return 'string';
+	}
+
 	// --- EditableColumn -------------------------------------------------
 
 	public function get_raw_value( int $object_id, array $settings ): string {
