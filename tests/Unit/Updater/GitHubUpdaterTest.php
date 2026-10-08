@@ -140,6 +140,54 @@ final class GitHubUpdaterTest extends TestCase {
 		$this->assertSame( 1, $this->http_calls );
 	}
 
+	private function stub_escaping(): void {
+		Functions\when( 'esc_html' )->alias( static fn( $s ) => htmlspecialchars( (string) $s, ENT_QUOTES, 'UTF-8' ) );
+		Functions\when( 'esc_url' )->alias( static fn( $s ) => htmlspecialchars( (string) $s, ENT_QUOTES, 'UTF-8' ) );
+		Functions\when( 'esc_html__' )->alias( static fn( $s ) => htmlspecialchars( (string) $s, ENT_QUOTES, 'UTF-8' ) );
+	}
+
+	public function test_plugins_api_passes_through_other_slugs_and_actions(): void {
+		$updater = new GitHubUpdater( '' );
+		$this->assertFalse( $updater->plugin_information( false, 'plugin_information', (object) [ 'slug' => 'akismet' ] ) );
+		$this->assertFalse( $updater->plugin_information( false, 'query_plugins', (object) [ 'slug' => 'columnkit' ] ) );
+		$this->assertSame( 0, $this->http_calls );
+	}
+
+	public function test_plugins_api_returns_details_for_our_slug(): void {
+		$this->stub_escaping();
+		$response = $this->release_response( 'v0.7.0' );
+		$body     = json_decode( $response['body'], true );
+		$body['body']         = "## What's new\n- Term columns\n- See [docs](https://github.com/brendanoconnellwp/columnkit)";
+		$body['published_at'] = '2026-10-07T00:00:00Z';
+		$response['body']     = (string) json_encode( $body );
+		$this->next_response  = $response;
+
+		$info = ( new GitHubUpdater( '' ) )->plugin_information( false, 'plugin_information', (object) [ 'slug' => 'columnkit' ] );
+
+		$this->assertIsObject( $info );
+		$this->assertSame( 'columnkit', $info->slug );
+		$this->assertSame( '0.7.0', $info->version );
+		$this->assertSame( '6.0', $info->requires );
+		$this->assertSame( '8.0', $info->requires_php );
+		$this->assertSame( '2026-10-07T00:00:00Z', $info->last_updated );
+		$this->assertStringEndsWith( 'columnkit-0.7.0.zip', $info->download_link );
+		$this->assertStringContainsString( '<h3>', $info->sections['changelog'] );
+		$this->assertStringContainsString( '<li>Term columns</li>', $info->sections['changelog'] );
+		$this->assertStringContainsString( '<a href="https://github.com/brendanoconnellwp/columnkit"', $info->sections['changelog'] );
+		$this->assertNotSame( '', $info->sections['description'] );
+	}
+
+	public function test_changelog_markdown_escapes_html(): void {
+		$this->stub_escaping();
+		$html = GitHubUpdater::markdown_to_html( "<script>alert(1)</script>\n- <img src=x onerror=alert(1)>\n[x](javascript:alert(1))" );
+
+		$this->assertStringNotContainsString( '<script>', $html );
+		$this->assertStringNotContainsString( '<img', $html );
+		$this->assertStringContainsString( '&lt;script&gt;', $html );
+		// Non-http(s) link targets are never turned into anchors.
+		$this->assertStringNotContainsString( 'href="javascript', $html );
+	}
+
 	public function test_flush_cache_on_plugin_upgrade(): void {
 		$this->transients['ck_github_update'] = [ 'tag_name' => 'v0.6.0' ];
 		$updater = new GitHubUpdater( '' );

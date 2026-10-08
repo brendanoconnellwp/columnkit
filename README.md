@@ -178,17 +178,21 @@ WP core's `update_plugins_github.com` filter: it checks the latest release (cach
 transient, failures cached 1h), and when the release version beats the installed one, wp-admin
 shows the native "update available" row and one-click installs the release zip.
 
-**Release process:** bump the version in `columnkit.php` (header + `CK_VERSION` must agree) and
-`readme.txt`, merge to main, then push a tag:
+**Release process:** bump the version in `columnkit.php` (header + `CK_VERSION` must agree), set
+`Stable tag` and add a `= X.Y.Z =` changelog entry in `readme.txt`, and merge to main. That's it:
 
-```bash
-git tag v0.6.0 && git push origin v0.6.0
-```
+1. The Release workflow sees `columnkit.php` change on main, reads the version, and — if tag
+   `vX.Y.Z` doesn't exist yet — builds `columnkit-X.Y.Z.zip` (dev files excluded, single
+   `columnkit/` folder so in-place upgrades work), creates the tag, and publishes the GitHub
+   release. The release notes are that version's changelog block from `readme.txt`.
+   Merges that don't bump the version are no-ops.
+2. Sites see the update on their next check (twice-daily cron or a Plugins-page visit). To check
+   immediately, click **Check for updates** under ColumnKit on the Plugins screen.
+3. **View details** on the update row opens WP's standard details modal with the release's
+   changelog, served from GitHub (`plugins_api` filter).
 
-The Release workflow verifies the tag matches the plugin version, builds `columnkit-{v}.zip`
-(dev files excluded, single `columnkit/` folder so in-place upgrades work), and publishes the
-GitHub release. Sites pick it up on the next update check (`wp cron` / visiting the Plugins page;
-force with `wp plugin update --all --dry-run` or "Check again" on Dashboard → Updates).
+Pushing a tag by hand (`git tag v0.7.0 && git push origin v0.7.0`) or running the workflow from the
+Actions tab still works; both verify the tag matches `columnkit.php`.
 
 **Private repo?** Release-asset downloads then need auth: create one fine-grained read-only PAT
 for this repo and add `define( 'CK_GITHUB_TOKEN', '...' );` to each site's `wp-config.php` — the
