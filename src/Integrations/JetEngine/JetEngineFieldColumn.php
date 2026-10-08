@@ -5,8 +5,12 @@ namespace ColumnKit\Integrations\JetEngine;
 
 use ColumnKit\Columns\BaseColumn;
 use ColumnKit\Columns\ConditionallyEditableColumn;
+use ColumnKit\Columns\ContextualColumn;
+use ColumnKit\Columns\MetaSortable;
 use ColumnKit\Columns\FilterableColumn;
 use ColumnKit\Columns\SortableColumn;
+use ColumnKit\Support\ObjectContext;
+use ColumnKit\Support\ScreenIdentifier;
 use WP_Query;
 
 /**
@@ -20,8 +24,12 @@ use WP_Query;
  * checkbox) and timestamp dates are intentionally NOT editable here — JetEngine's stored
  * representation for those varies by version/config and a wrong write would corrupt data;
  * editing them belongs in JetEngine's own UI. supports_inline_edit() is the gate.
+ *
+ * Also works on taxonomy and user screens: meta boxes whose object_type is `taxonomy` / `user`
+ * (plus meta fields defined on JetEngine-built taxonomies) are offered there, and values are
+ * plain term / user meta keyed by the field name.
  */
-final class JetEngineFieldColumn extends BaseColumn implements SortableColumn, FilterableColumn, ConditionallyEditableColumn {
+final class JetEngineFieldColumn extends BaseColumn implements SortableColumn, FilterableColumn, ConditionallyEditableColumn, ContextualColumn, MetaSortable {
 	/** JetEngine field type => popover input. select covers select/radio (single value). */
 	private const EDITABLE_TYPES = [
 		'text'   => 'text',
@@ -47,19 +55,125 @@ final class JetEngineFieldColumn extends BaseColumn implements SortableColumn, F
 	}
 
 	public function applies_to_screen( string $screen_key ): bool {
-		return str_starts_with( $screen_key, 'post_type:' ) || $screen_key === 'media';
+		return str_starts_with( $screen_key, 'post_type:' )
+			|| $screen_key === 'media'
+			|| str_starts_with( $screen_key, 'taxonomy:' )
+			|| $screen_key === 'users';
 	}
 
 	public function settings_fields(): array {
+		return $this->fields_with_options( $this->discover_field_options( null ) );
+	}
+
+	public function settings_fields_for_screen( string $screen_key ): array {
+		return $this->fields_with_options( $this->discover_field_options( $screen_key ) );
+	}
+
+	/**
+	 * @param array<string, string> $options
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function fields_with_options( array $options ): array {
 		return [
 			[
 				'key'      => 'field_name',
 				'label'    => __( 'JetEngine Field', 'columnkit' ),
 				'type'     => 'select',
-				'options'  => $this->discover_field_options(),
+				'options'  => $options,
 				'required' => true,
+				'empty'    => __( 'No JetEngine meta boxes target this screen yet. Create one in JetEngine → Meta Boxes for this taxonomy or for users.', 'columnkit' ),
 			],
 		];
+	}
+
+	/**
+	 * Every place JetEngine defines meta fields, normalised to
+	 * [ object => post|term|user, subjects => string[] (empty = all of that object), fields => array[] ].
+	 *
+	 * @return array<int, array{object: string, subjects: array<int, string>, fields: array<int, mixed>}>
+	 */
+	private function field_sources(): array {
+		if ( ! function_exists( 'jet_engine' ) ) {
+			return [];
+		}
+		$engine  = jet_engine();
+		$sources = [];
+
+		if ( isset( $engine->meta_boxes ) && method_exists( $engine->meta_boxes, 'get_registered_boxes' ) ) {
+			try {
+				$boxes = $engine->meta_boxes->get_registered_boxes();
+			} catch ( \Throwable $e ) {
+				$boxes = [];
+			}
+			foreach ( is_array( $boxes ) ? $boxes : [] as $box ) {
+				if ( ! is_array( $box ) ) {
+					continue;
+				}
+				$args   = is_array( $box['args'] ?? null ) ? $box['args'] : $box;
+				$fields = $args['meta_fields'] ?? ( $box['meta_fields'] ?? [] );
+				$kind   = (string) ( $args['object_type'] ?? 'post' );
+				$object = match ( $kind ) {
+					'taxonomy', 'term' => ObjectContext::TERM,
+					'user'             => ObjectContext::USER,
+					default            => ObjectContext::POST,
+				};
+				$subjects = match ( $object ) {
+					ObjectContext::TERM => (array) ( $args['allowed_tax'] ?? [] ),
+					ObjectContext::POST => (array) ( $args['allowed_post_type'] ?? [] ),
+					default             => [],
+				};
+				$sources[] = [
+					'object'   => $object,
+					'subjects' => array_values( array_map( 'strval', $subjects ) ),
+					'fields'   => is_array( $fields ) ? $fields : [],
+				];
+			}
+		}
+
+		// Meta fields defined directly on JetEngine-built taxonomies.
+		$tax_module = $engine->taxonomies ?? null;
+		$store      = null;
+		if ( is_object( $tax_module ) && isset( $tax_module->data ) && is_object( $tax_module->data ) && method_exists( $tax_module->data, 'get_items' ) ) {
+			$store = $tax_module->data;
+		} elseif ( is_object( $tax_module ) && method_exists( $tax_module, 'get_items' ) ) {
+			$store = $tax_module;
+		}
+		if ( $store !== null ) {
+			try {
+				$items = $store->get_items();
+			} catch ( \Throwable $e ) {
+				$items = [];
+			}
+			foreach ( is_array( $items ) ? $items : [] as $item ) {
+				if ( ! is_array( $item ) || empty( $item['slug'] ) || ! is_array( $item['meta_fields'] ?? null ) ) {
+					continue;
+				}
+				$sources[] = [
+					'object'   => ObjectContext::TERM,
+					'subjects' => [ (string) $item['slug'] ],
+					'fields'   => $item['meta_fields'],
+				];
+			}
+		}
+
+		return $sources;
+	}
+
+	/** @param array{object: string, subjects: array<int, string>, fields: array<int, mixed>} $source */
+	private static function source_targets_screen( array $source, string $screen_key ): bool {
+		$object = ObjectContext::from_screen( $screen_key );
+		if ( $source['object'] !== $object ) {
+			return false;
+		}
+		if ( $source['subjects'] === [] ) {
+			return true;
+		}
+		$subject = match ( $object ) {
+			ObjectContext::TERM => (string) ScreenIdentifier::taxonomy( $screen_key ),
+			ObjectContext::USER => '',
+			default             => ScreenIdentifier::is_media( $screen_key ) ? 'attachment' : (string) ScreenIdentifier::post_type( $screen_key ),
+		};
+		return in_array( $subject, $source['subjects'], true );
 	}
 
 	public function sanitize_settings( array $input ): array {
@@ -70,30 +184,23 @@ final class JetEngineFieldColumn extends BaseColumn implements SortableColumn, F
 		return $out;
 	}
 
-	/** @return array<string, string> field_name => "Title (type)" */
-	private function discover_field_options(): array {
-		if ( ! function_exists( 'jet_engine' ) ) {
-			return [];
-		}
-		$engine = jet_engine();
-		if ( ! isset( $engine->meta_boxes ) || ! method_exists( $engine->meta_boxes, 'get_registered_boxes' ) ) {
-			return [];
+	/**
+	 * Field options for the picker. With a screen key, only sources targeting that screen; post
+	 * screens fall back to every source when none match (keeps unusual configs working).
+	 *
+	 * @return array<string, string> field_name => "Title (type)"
+	 */
+	private function discover_field_options( ?string $screen_key ): array {
+		$sources = $this->field_sources();
+		if ( $screen_key !== null ) {
+			$matched = array_values( array_filter( $sources, static fn( $src ) => self::source_targets_screen( $src, $screen_key ) ) );
+			if ( $matched !== [] || ObjectContext::from_screen( $screen_key ) !== ObjectContext::POST ) {
+				$sources = $matched;
+			}
 		}
 		$out = [];
-		try {
-			$boxes = $engine->meta_boxes->get_registered_boxes();
-		} catch ( \Throwable $e ) {
-			return [];
-		}
-		if ( ! is_array( $boxes ) ) {
-			return [];
-		}
-		foreach ( $boxes as $box ) {
-			$fields = $box['args']['meta_fields'] ?? ( $box['meta_fields'] ?? [] );
-			if ( ! is_array( $fields ) ) {
-				continue;
-			}
-			foreach ( $fields as $field ) {
+		foreach ( $sources as $source ) {
+			foreach ( $source['fields'] as $field ) {
 				if ( ! is_array( $field ) ) {
 					continue;
 				}
@@ -114,7 +221,7 @@ final class JetEngineFieldColumn extends BaseColumn implements SortableColumn, F
 		if ( $field_name === '' ) {
 			return '';
 		}
-		$value = get_post_meta( $object_id, $field_name, true );
+		$value = ObjectContext::get_meta( ObjectContext::from_settings( $settings ), $object_id, $field_name );
 		if ( $value === '' || $value === false || $value === null ) {
 			return '';
 		}
@@ -141,7 +248,7 @@ final class JetEngineFieldColumn extends BaseColumn implements SortableColumn, F
 		if ( $field_name === '' ) {
 			return '';
 		}
-		$raw = get_post_meta( $object_id, $field_name, true );
+		$raw = ObjectContext::get_meta( ObjectContext::from_settings( $settings ), $object_id, $field_name );
 		if ( $raw === '' || $raw === false || $raw === null ) {
 			return '';
 		}
@@ -213,7 +320,7 @@ final class JetEngineFieldColumn extends BaseColumn implements SortableColumn, F
 		if ( $name === '' ) {
 			return '';
 		}
-		$val = get_post_meta( $object_id, $name, true );
+		$val = ObjectContext::get_meta( ObjectContext::from_settings( $settings ), $object_id, $name );
 		if ( $val === '' || $val === false || $val === null || is_array( $val ) || is_object( $val ) ) {
 			return '';
 		}
@@ -259,13 +366,9 @@ final class JetEngineFieldColumn extends BaseColumn implements SortableColumn, F
 		}
 
 		// Capability parity with PostMetaColumn for protected meta keys.
-		if ( is_protected_meta( $name, 'post' ) ) {
-			$post_type   = get_post_type( $post_id );
-			$pt_obj      = $post_type ? get_post_type_object( $post_type ) : null;
-			$trusted_cap = $pt_obj->cap->edit_others_posts ?? 'edit_others_posts';
-			if ( ! current_user_can( $trusted_cap ) ) {
-				return;
-			}
+		$object = ObjectContext::from_settings( $settings );
+		if ( ! ObjectContext::can_write_key( $object, $post_id, $name ) ) {
+			return;
 		}
 
 		$type = (string) ( $field['type'] ?? '' );
@@ -273,46 +376,46 @@ final class JetEngineFieldColumn extends BaseColumn implements SortableColumn, F
 		switch ( self::EDITABLE_TYPES[ $type ] ) {
 			case 'number':
 				if ( $raw_value === '' ) {
-					delete_post_meta( $post_id, $name );
+					ObjectContext::delete_meta( $object, $post_id, $name );
 					return;
 				}
 				if ( ! is_numeric( $raw_value ) ) {
 					return;
 				}
-				update_post_meta( $post_id, $name, $raw_value + 0 );
+				ObjectContext::update_meta( $object, $post_id, $name, $raw_value + 0 );
 				return;
 
 			case 'date':
 				if ( $raw_value === '' ) {
-					delete_post_meta( $post_id, $name );
+					ObjectContext::delete_meta( $object, $post_id, $name );
 					return;
 				}
 				$ts = strtotime( $raw_value );
 				if ( $ts === false ) {
 					return;
 				}
-				update_post_meta( $post_id, $name, gmdate( 'Y-m-d', $ts ) );
+				ObjectContext::update_meta( $object, $post_id, $name, gmdate( 'Y-m-d', $ts ) );
 				return;
 
 			case 'select':
 				if ( $raw_value === '' ) {
-					delete_post_meta( $post_id, $name );
+					ObjectContext::delete_meta( $object, $post_id, $name );
 					return;
 				}
 				$options = $this->get_edit_options( $settings );
 				if ( is_array( $options ) && ! array_key_exists( $raw_value, $options ) ) {
 					return; // Reject values outside known choices (when choices are known).
 				}
-				update_post_meta( $post_id, $name, $raw_value );
+				ObjectContext::update_meta( $object, $post_id, $name, $raw_value );
 				return;
 
 			case 'text':
 			default:
 				if ( $raw_value === '' ) {
-					delete_post_meta( $post_id, $name );
+					ObjectContext::delete_meta( $object, $post_id, $name );
 					return;
 				}
-				update_post_meta( $post_id, $name, $raw_value );
+				ObjectContext::update_meta( $object, $post_id, $name, $raw_value );
 				return;
 		}
 	}
@@ -364,33 +467,30 @@ final class JetEngineFieldColumn extends BaseColumn implements SortableColumn, F
 		}
 
 		$found = null;
-		if ( function_exists( 'jet_engine' ) ) {
-			$engine = jet_engine();
-			if ( isset( $engine->meta_boxes ) && method_exists( $engine->meta_boxes, 'get_registered_boxes' ) ) {
-				try {
-					$boxes = $engine->meta_boxes->get_registered_boxes();
-				} catch ( \Throwable $e ) {
-					$boxes = [];
-				}
-				if ( is_array( $boxes ) ) {
-					foreach ( $boxes as $box ) {
-						$fields = $box['args']['meta_fields'] ?? ( $box['meta_fields'] ?? [] );
-						if ( ! is_array( $fields ) ) {
-							continue;
-						}
-						foreach ( $fields as $field ) {
-							if ( is_array( $field ) && ( $field['name'] ?? '' ) === $name ) {
-								$found = $field;
-								break 2;
-							}
-						}
-					}
+		foreach ( $this->field_sources() as $source ) {
+			foreach ( $source['fields'] as $field ) {
+				if ( is_array( $field ) && ( $field['name'] ?? '' ) === $name ) {
+					$found = $field;
+					break 2;
 				}
 			}
 		}
 
 		$this->field_cache[ $name ] = $found;
 		return $found;
+	}
+
+	// ------------------------------------------------------------------
+	// MetaSortable — term + user screens
+	// ------------------------------------------------------------------
+
+	public function sort_meta_key( array $settings ): string {
+		return (string) ( $settings['field_name'] ?? '' );
+	}
+
+	public function sort_meta_type( array $settings ): string {
+		$field = $this->resolve_field( (string) ( $settings['field_name'] ?? '' ) );
+		return ( $field !== null && ( $field['type'] ?? '' ) === 'number' ) ? 'numeric' : 'string';
 	}
 
 	// ------------------------------------------------------------------

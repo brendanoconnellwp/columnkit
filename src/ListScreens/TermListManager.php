@@ -8,6 +8,7 @@ use ColumnKit\ColumnRegistry;
 use ColumnKit\Columns\MetaSortable;
 use ColumnKit\Settings\SettingsRepository;
 use ColumnKit\Support\ColumnPresenter;
+use ColumnKit\Support\MetaSortSql;
 use ColumnKit\Support\SetResolver;
 
 /**
@@ -69,6 +70,9 @@ final class TermListManager {
 	}
 
 	/**
+	 * get_terms_args — when one of our headers was clicked, arm a one-shot terms_clauses filter
+	 * that LEFT JOINs the term meta and orders by it (see MetaSortSql for why not meta_key).
+	 *
 	 * @param array<string, mixed>  $args
 	 * @param array<int, string>|string $taxonomies
 	 * @return array<string, mixed>
@@ -80,6 +84,9 @@ final class TermListManager {
 		$taxes = (array) $taxonomies;
 		if ( ! in_array( $this->taxonomy, $taxes, true ) ) {
 			return $args;
+		}
+		if ( ( $args['fields'] ?? '' ) === 'count' ) {
+			return $args; // Pagination count — ordering is irrelevant.
 		}
 		$orderby = isset( $_GET['orderby'] ) && is_string( $_GET['orderby'] ) ? wp_unslash( $_GET['orderby'] ) : '';
 		if ( ! str_starts_with( $orderby, 'ck_' ) ) {
@@ -99,10 +106,30 @@ final class TermListManager {
 			if ( $key === '' ) {
 				return $args;
 			}
-			$order        = isset( $_GET['order'] ) && is_scalar( $_GET['order'] ) && strtoupper( (string) $_GET['order'] ) === 'ASC' ? 'ASC' : 'DESC';
-			$args['meta_key'] = $key;
-			$args['orderby']  = 'meta_value';
-			$args['order']    = $order;
+			$order = MetaSortSql::order( isset( $_GET['order'] ) && is_scalar( $_GET['order'] ) ? (string) $_GET['order'] : '' );
+			$type  = $col->sort_meta_type( $settings );
+
+			// Mark this exact query so the clauses filter can't touch any other get_terms call.
+			$marker               = 'ck_sort_' . wp_generate_password( 8, false );
+			$args['ck_sort_mark'] = $marker;
+			$args['orderby']      = 'name'; // Neutral native orderby; replaced in terms_clauses.
+
+			$callback = static function ( array $clauses, $tax, array $query_args ) use ( $key, $type, $order, $marker, &$callback ) {
+				if ( ( $query_args['ck_sort_mark'] ?? '' ) !== $marker ) {
+					return $clauses;
+				}
+				remove_filter( 'terms_clauses', $callback, 10 );
+				global $wpdb;
+				$alias             = 'ck_tsort';
+				$clauses['join']  .= $wpdb->prepare(
+					" LEFT JOIN {$wpdb->termmeta} AS {$alias} ON t.term_id = {$alias}.term_id AND {$alias}.meta_key = %s",
+					$key
+				);
+				$clauses['orderby'] = 'ORDER BY ' . MetaSortSql::expression( $alias, $type ) . " {$order}, t.name";
+				$clauses['order']   = 'ASC';
+				return $clauses;
+			};
+			add_filter( 'terms_clauses', $callback, 10, 3 );
 			return $args;
 		}
 		return $args;

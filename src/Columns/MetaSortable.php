@@ -5,9 +5,9 @@ namespace ColumnKit\Columns;
 
 /**
  * A column that can be sorted by a single meta key, on screens whose queries are NOT WP_Query
- * (Users via WP_User_Query, Terms via WP_Term_Query). The list managers read the key and wire
- * the appropriate orderby/meta_key on the native query — columns don't touch the query object,
- * so one interface serves both user-meta and term-meta sorting.
+ * (Users via WP_User_Query, Terms via WP_Term_Query). The list managers read the key and add a
+ * LEFT JOIN on the matching meta table — columns don't touch the query object, so one interface
+ * serves both user-meta and term-meta sorting.
  */
 interface MetaSortable {
 	/**
@@ -16,4 +16,11 @@ interface MetaSortable {
 	 * @param array<string, mixed> $settings
 	 */
 	public function sort_meta_key( array $settings ): string;
+
+	/**
+	 * How to compare values: 'string', 'numeric' (CAST to DECIMAL) or 'date' (CAST to DATETIME).
+	 *
+	 * @param array<string, mixed> $settings
+	 */
+	public function sort_meta_type( array $settings ): string;
 }
