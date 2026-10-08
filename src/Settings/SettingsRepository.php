@@ -21,6 +21,14 @@ namespace ColumnKit\Settings;
  *   [ 'id' => 'col_xxxx', 'type' => 'post_meta', 'label' => 'Foo',
  *     'settings' => [...], 'width' => '', 'format' => [...] ]
  *
+ * Optional per-set `layout` (written by the column editor; absent = legacy "append our columns
+ * after WordPress's own" behaviour):
+ *   [ 'order'  => [ 'title', 'ck_col_xxxx', 'author', ... ],        // WP column keys, in order
+ *     'native' => [ 'title' => [ 'label' => '', 'hidden' => false, 'width' => '' ], ... ] ]
+ * `native` lists every built-in column the editor knew about when it saved; one missing from
+ * it (a plugin activated later) is appended rather than hidden. `columns` never contains
+ * built-in columns, so every consumer of get_columns() keeps seeing custom columns only.
+ *
  * Backwards compatibility: schema v1 stored a flat `columns` array with no sets. get()
  * migrates v1 payloads to v2 in memory on read (wrapping the old list into the `default`
  * set); the migrated shape is persisted on the next save(), never during a read request.
@@ -81,6 +89,18 @@ final class SettingsRepository {
 		return $out;
 	}
 
+	/**
+	 * Layout (order + built-in column overrides) for a set, or [] when the set has never been
+	 * saved from the layout-aware editor.
+	 *
+	 * @return array{order?: array<int, string>, native?: array<string, array{label: string, hidden: bool, width: string}>}
+	 */
+	public function get_layout( string $screen_key, string $set_id = self::DEFAULT_SET ): array {
+		$sets = $this->get( $screen_key )['sets'];
+		$set  = $sets[ $set_id ] ?? ( $sets[ self::DEFAULT_SET ] ?? [] );
+		return isset( $set['layout'] ) && is_array( $set['layout'] ) ? $set['layout'] : [];
+	}
+
 	public function set_exists( string $screen_key, string $set_id ): bool {
 		return isset( $this->get( $screen_key )['sets'][ $set_id ] );
 	}
@@ -89,15 +109,68 @@ final class SettingsRepository {
 	 * Create or replace a single set's columns + label, preserving every other set.
 	 *
 	 * @param array<int, array<string, mixed>> $columns
+	 * @param array<string, mixed>|null        $layout  New layout; null keeps the set's existing one
+	 *                                                  (so rename / programmatic saves don't drop it).
 	 */
-	public function save_set( string $screen_key, string $set_id, string $label, array $columns ): void {
-		$set_id  = self::sanitize_set_id( $set_id );
-		$payload = $this->get( $screen_key );
-		$payload['sets'][ $set_id ] = [
+	public function save_set( string $screen_key, string $set_id, string $label, array $columns, ?array $layout = null ): void {
+		$set_id   = self::sanitize_set_id( $set_id );
+		$payload  = $this->get( $screen_key );
+		$previous = $payload['sets'][ $set_id ]['layout'] ?? [];
+		$layout   = self::sanitize_layout( $layout ?? ( is_array( $previous ) ? $previous : [] ) );
+
+		$set = [
 			'label'   => $label !== '' ? $label : ( $set_id === self::DEFAULT_SET ? 'Default' : $set_id ),
 			'columns' => array_values( $columns ),
 		];
+		if ( $layout !== [] ) {
+			$set['layout'] = $layout;
+		}
+		$payload['sets'][ $set_id ] = $set;
 		$this->persist( $screen_key, $payload );
+	}
+
+	/**
+	 * Whitelist a layout block. Column keys are WP list-table keys ([A-Za-z0-9_-], e.g.
+	 * `title`, `taxonomy-genre`, `ck_col_ab12`); labels are plain text; widths are a number
+	 * with an optional px/%/em/rem unit.
+	 *
+	 * @param array<string, mixed> $in
+	 * @return array{order?: array<int, string>, native?: array<string, array{label: string, hidden: bool, width: string}>}
+	 */
+	public static function sanitize_layout( array $in ): array {
+		$order = [];
+		foreach ( is_array( $in['order'] ?? null ) ? $in['order'] : [] as $key ) {
+			$key = is_scalar( $key ) ? self::sanitize_column_key( (string) $key ) : '';
+			if ( $key !== '' && $key !== 'cb' && ! in_array( $key, $order, true ) ) {
+				$order[] = $key;
+			}
+		}
+		$native = [];
+		foreach ( is_array( $in['native'] ?? null ) ? $in['native'] : [] as $key => $cfg ) {
+			$key = self::sanitize_column_key( (string) $key );
+			if ( $key === '' || $key === 'cb' || str_starts_with( $key, 'ck_' ) ) {
+				continue;
+			}
+			$cfg   = is_array( $cfg ) ? $cfg : [];
+			$label = isset( $cfg['label'] ) && is_scalar( $cfg['label'] ) ? sanitize_text_field( (string) $cfg['label'] ) : '';
+			$width = isset( $cfg['width'] ) && is_scalar( $cfg['width'] ) ? strtolower( trim( (string) $cfg['width'] ) ) : '';
+			if ( preg_match( '/^\d{1,4}(px|%|em|rem)?$/', $width ) !== 1 ) {
+				$width = '';
+			}
+			$native[ $key ] = [
+				'label'  => $label,
+				'hidden' => ! empty( $cfg['hidden'] ),
+				'width'  => $width,
+			];
+		}
+		if ( $native === [] ) {
+			return []; // Without known built-ins a layout can't place anything reliably.
+		}
+		return [ 'order' => $order, 'native' => $native ];
+	}
+
+	public static function sanitize_column_key( string $key ): string {
+		return substr( (string) preg_replace( '/[^A-Za-z0-9_\-]/', '', $key ), 0, 100 );
 	}
 
 	/**
@@ -177,6 +250,9 @@ final class SettingsRepository {
 				$label   = isset( $set['label'] ) && is_string( $set['label'] ) ? $set['label'] : $id;
 				$columns = isset( $set['columns'] ) && is_array( $set['columns'] ) ? array_values( $set['columns'] ) : [];
 				$sets[ $id ] = [ 'label' => $label, 'columns' => $columns ];
+				if ( isset( $set['layout'] ) && is_array( $set['layout'] ) && $set['layout'] !== [] ) {
+					$sets[ $id ]['layout'] = $set['layout'];
+				}
 			}
 		} elseif ( isset( $option['columns'] ) && is_array( $option['columns'] ) ) {
 			// v1 → v2: wrap the flat column list into the default set.

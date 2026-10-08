@@ -20,8 +20,8 @@ final class Assets {
 			);
 		}
 
-		// View switcher — load on the list tables where it can appear (posts, media, users).
-		if ( in_array( $hook, [ 'edit.php', 'upload.php', 'users.php' ], true ) ) {
+		// View switcher + the "Columns" shortcut next to the page title — on every list table.
+		if ( in_array( $hook, [ 'edit.php', 'upload.php', 'users.php', 'edit-tags.php' ], true ) ) {
 			wp_enqueue_script(
 				'ck-list-screen',
 				CK_URL . 'assets/list-screen.js',
@@ -29,6 +29,20 @@ final class Assets {
 				CK_VERSION,
 				true
 			);
+			$screen     = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+			$screen_key = $screen instanceof \WP_Screen ? \ColumnKit\Support\ScreenIdentifier::from_screen( $screen ) : null;
+			if ( $screen_key !== null && current_user_can( SettingsPage::CAPABILITY ) ) {
+				$set = \ColumnKit\Plugin::instance()->list_screen_manager()->active_set_id();
+				wp_localize_script(
+					'ck-list-screen',
+					'CK_LIST',
+					[
+						'manageUrl'   => SettingsPage::url( [ 'screen' => $screen_key, 'set' => $set ] ),
+						'manageLabel' => __( 'Columns', 'columnkit' ),
+						'manageTitle' => __( 'Add, hide and reorder the columns on this screen', 'columnkit' ),
+					]
+				);
+			}
 		}
 
 		// Settings page assets.
@@ -53,6 +67,7 @@ final class Assets {
 				[
 					'removeConfirm' => __( 'Remove this column?', 'columnkit' ),
 					'addedLabel'    => __( 'New column', 'columnkit' ),
+					'leaveWarning'  => __( 'You have unsaved column changes.', 'columnkit' ),
 					'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
 					'metaAction'    => \ColumnKit\Admin\MetaKeySuggestions::AJAX_ACTION,
 					'metaNonce'     => wp_create_nonce( \ColumnKit\Admin\MetaKeySuggestions::NONCE ),

@@ -10,7 +10,7 @@ Built as a six-phase exercise, with security and performance pitfalls documented
 
 | Surface | Feature |
 |---|---|
-| Settings page (`Settings → Admin Columns`) | Pick a screen → choose/create a **view** → searchable **Add column** picker → collapsible, drag-reorderable rows with per-field help and a **Display** panel → save |
+| Column editor (`Settings → Admin Columns`, or the **Columns** button on any list table) | Every list screen in a searchable sidebar → choose/create a **view** → one drag-reorderable table of **WordPress's built-in columns** (rename / hide / resize) and **your custom columns** → **Add column** picker grouped by source, listing each ACF / Meta Box / JetEngine field directly → save (Ctrl/⌘+S) |
 | Column Sets (saved views) | Define multiple named column layouts per screen ("SEO view", "Editorial view"…). Switch between them from a dropdown above the list table; each user's choice is remembered per screen. Inline-edit, bulk-edit, and export follow the active view |
 | Per-column display formatting | Width, text alignment, prefix/suffix, and an optional coloured badge/pill (text + background colour) — set per column in the row's **Display** panel. Prefix/suffix flow through to export |
 | Post / Page / CPT / Media list tables | Custom columns, sortable headers, filter inputs above the table |
@@ -20,7 +20,7 @@ Built as a six-phase exercise, with security and performance pitfalls documented
 | Bulk Edit | WP's native panel with our fields + apply-checkbox per column |
 | Export buttons above the list | CSV or JSON of the current filtered/sorted view |
 | Settings page | Export/import the full column configuration as JSON |
-| ACF / Meta Box / JetEngine / WooCommerce / Yoast | Auto-detected; their fields show up as available column types when their host plugin is active |
+| ACF / Meta Box / JetEngine / WooCommerce / Yoast | Auto-detected; their fields show up as available column types when their host plugin is active. ACF / Meta Box / JetEngine fields work on **posts, taxonomy term lists and Users** — the picker only offers fields whose location targets that screen, and they're sortable + inline-editable there |
 
 ---
 
@@ -28,8 +28,8 @@ Built as a six-phase exercise, with security and performance pitfalls documented
 
 1. Activate the plugin: `Plugins → ColumnKit → Activate`
 2. Visit `Settings → Admin Columns`
-3. Pick a screen (e.g. **Posts — Posts**, or **Users**), click **Add Column**
-4. Configure (label, meta key, value type for post-meta columns) and **Save Columns**
+3. Pick a screen in the sidebar (e.g. **Posts**, **Categories**, **Users**) — or click **Columns** next to the title of any list table
+4. Drag, rename or hide the built-in columns; **Add column** → pick a field (ACF fields appear by name) → **Save changes**
 5. Visit the list table for that screen — your columns appear
 
 To inline-edit a value:
