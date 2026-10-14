@@ -1,7 +1,16 @@
 name: Release
 
+# Three ways in:
+#   1. Merge a version bump to main (columnkit.php changed) → if tag v{version} doesn't exist yet,
+#      the release (and its tag) is created automatically. Merges that don't bump are no-ops.
+#   2. Push a tag v{X.Y.Z} by hand.
+#   3. Run the workflow manually (Actions → Release → Run workflow).
 on:
   push:
+    branches:
+      - main
+    paths:
+      - 'columnkit.php'
     tags:
       - 'v*'
   workflow_dispatch:
@@ -13,6 +22,11 @@ on:
 
 permissions:
   contents: write
+
+# One release run per ref at a time; a main push and a tag push for the same version can't race.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -44,11 +58,31 @@ jobs:
             echo "::error::Requested version $VERSION does not match columnkit.php ($HEADER_VERSION). Bump the plugin version first."
             exit 1
           fi
+          # readme.txt Stable tag drift is worth flagging but shouldn't block a release.
+          if [ -f readme.txt ]; then
+            STABLE_TAG="$(grep -oP '^Stable tag:\s*\K\S+' readme.txt | head -n1 || true)"
+            if [ -n "$STABLE_TAG" ] && [ "$STABLE_TAG" != "$VERSION" ]; then
+              echo "::warning::readme.txt Stable tag ($STABLE_TAG) does not match the release version ($VERSION)."
+            fi
+          fi
+
+          # Branch push: only release when this version hasn't been tagged yet, so ordinary
+          # merges that touch columnkit.php without a version bump do nothing.
+          SKIP=false
+          if [ "${GITHUB_REF_TYPE:-}" = "branch" ] && [ "${GITHUB_EVENT_NAME:-}" = "push" ]; then
+            if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+              echo "Tag v$VERSION already exists — nothing to release."
+              SKIP=true
+            fi
+          fi
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Releasing v$VERSION"
+          echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
+          [ "$SKIP" = "true" ] || echo "Releasing v$VERSION"
 
       - name: Build plugin zip
+        if: steps.ver.outputs.skip != 'true'
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
@@ -80,6 +114,7 @@ jobs:
           unzip -l "columnkit-${VERSION}.zip"
 
       - name: Create GitHub release
+        if: steps.ver.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.ver.outputs.tag }}
@@ -89,9 +124,29 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists; uploading/overwriting asset."
             gh release upload "$TAG" "columnkit-${VERSION}.zip" --clobber
-          else
-            gh release create "$TAG" \
-              "columnkit-${VERSION}.zip" \
-              --title "ColumnKit ${VERSION}" \
-              --generate-notes
+            exit 0
           fi
+
+          # Release notes = this version's "= X.Y.Z =" block from readme.txt's changelog, which is
+          # what the in-admin "View details" changelog tab shows. Falls back to GitHub's generated
+          # notes when the block is missing.
+          NOTES_ARGS=(--generate-notes)
+          if [ -f readme.txt ]; then
+            awk -v v="$VERSION" '
+              $0 == "= " v " =" { on = 1; next }
+              on && /^= .* =$/   { exit }
+              on && /^== /       { exit }
+              on                 { print }
+            ' readme.txt > "$RUNNER_TEMP/notes.md"
+            if [ -s "$RUNNER_TEMP/notes.md" ]; then
+              NOTES_ARGS=(--notes-file "$RUNNER_TEMP/notes.md")
+            fi
+          fi
+
+          # --target creates the tag at this commit when it doesn't exist yet (main-push path).
+          # Tags created with GITHUB_TOKEN don't re-trigger workflows, so there's no double run.
+          gh release create "$TAG" \
+            "columnkit-${VERSION}.zip" \
+            --target "$GITHUB_SHA" \
+            --title "ColumnKit ${VERSION}" \
+            "${NOTES_ARGS[@]}"

@@ -5,8 +5,12 @@ namespace ColumnKit\Integrations\MetaBox;
 
 use ColumnKit\Columns\BaseColumn;
 use ColumnKit\Columns\ConditionallyEditableColumn;
+use ColumnKit\Columns\ContextualColumn;
+use ColumnKit\Columns\MetaSortable;
 use ColumnKit\Columns\FilterableColumn;
 use ColumnKit\Columns\SortableColumn;
+use ColumnKit\Support\ObjectContext;
+use ColumnKit\Support\ScreenIdentifier;
 use WP_Query;
 
 /**
@@ -19,8 +23,12 @@ use WP_Query;
  * is the correct write. Anything cloned, multi-value, timestamp-stored, custom-date-format, or
  * structurally complex (image, file, group, post, taxonomy …) stays read-only — editing those
  * belongs in Meta Box's own UI. supports_inline_edit() is the gate.
+ *
+ * Also works on taxonomy and user screens (MB Term Meta / MB User Meta): the picker offers only
+ * meta boxes registered for that taxonomy (`taxonomies`) or for users (`type => user`), values
+ * read through rwmb_get_value() with the matching object_type, and writes go to term/user meta.
  */
-final class MetaBoxFieldColumn extends BaseColumn implements SortableColumn, FilterableColumn, ConditionallyEditableColumn {
+final class MetaBoxFieldColumn extends BaseColumn implements SortableColumn, FilterableColumn, ConditionallyEditableColumn, ContextualColumn, MetaSortable {
 	/** Meta Box field type => popover input. select covers select/select_advanced/radio. */
 	private const EDITABLE_TYPES = [
 		'text'            => 'text',
@@ -52,19 +60,66 @@ final class MetaBoxFieldColumn extends BaseColumn implements SortableColumn, Fil
 	}
 
 	public function applies_to_screen( string $screen_key ): bool {
-		return str_starts_with( $screen_key, 'post_type:' ) || $screen_key === 'media';
+		return str_starts_with( $screen_key, 'post_type:' )
+			|| $screen_key === 'media'
+			|| str_starts_with( $screen_key, 'taxonomy:' )
+			|| $screen_key === 'users';
 	}
 
 	public function settings_fields(): array {
+		return $this->fields_with_options( $this->discover_field_options( null ) );
+	}
+
+	public function settings_fields_for_screen( string $screen_key ): array {
+		return $this->fields_with_options( $this->discover_field_options( $screen_key ) );
+	}
+
+	/**
+	 * @param array<string, string> $options
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function fields_with_options( array $options ): array {
 		return [
 			[
 				'key'      => 'field_id',
 				'label'    => __( 'Meta Box Field', 'columnkit' ),
 				'type'     => 'select',
-				'options'  => $this->discover_field_options(),
+				'options'  => $options,
 				'required' => true,
+				'empty'    => __( 'No Meta Box field groups are registered for this screen. Term and user fields need the MB Term Meta / MB User Meta extensions.', 'columnkit' ),
 			],
 		];
+	}
+
+	/**
+	 * Does a registered meta box target this screen?
+	 *
+	 * @param array<string, mixed> $mb
+	 */
+	public static function box_targets_screen( array $mb, string $screen_key ): bool {
+		$object = ObjectContext::from_screen( $screen_key );
+		$type   = (string) ( $mb['type'] ?? '' );
+
+		if ( $object === ObjectContext::USER ) {
+			return $type === 'user';
+		}
+		$taxonomies = array_map( 'strval', (array) ( $mb['taxonomies'] ?? [] ) );
+		if ( $object === ObjectContext::TERM ) {
+			return in_array( (string) ScreenIdentifier::taxonomy( $screen_key ), $taxonomies, true );
+		}
+		// Posts / media: anything that isn't a term, user, settings-page, comment or block box.
+		if ( $taxonomies !== [] || in_array( $type, [ 'user', 'comment', 'block' ], true ) || ! empty( $mb['settings_pages'] ) ) {
+			return false;
+		}
+		$post_types = (array) ( $mb['post_types'] ?? ( $mb['pages'] ?? [ 'post' ] ) );
+		$post_type  = ScreenIdentifier::is_media( $screen_key ) ? 'attachment' : (string) ScreenIdentifier::post_type( $screen_key );
+		return in_array( $post_type, array_map( 'strval', $post_types ), true );
+	}
+
+	/** rwmb_get_value()/rwmb_meta() args for the column's object type. @return array<string, string> */
+	private static function rwmb_args( array $settings ): array {
+		$object = ObjectContext::from_settings( $settings );
+		return $object === ObjectContext::POST ? [] : [ 'object_type' => $object ];
 	}
 
 	public function sanitize_settings( array $input ): array {
@@ -75,14 +130,25 @@ final class MetaBoxFieldColumn extends BaseColumn implements SortableColumn, Fil
 		return $out;
 	}
 
-	/** @return array<string, string> field_id => "Name (type)" */
-	private function discover_field_options(): array {
+	/**
+	 * Field options for the picker. With a screen key, only boxes targeting that screen; post
+	 * screens fall back to every box when none match (keeps unusual configs working).
+	 *
+	 * @return array<string, string> field_id => "Name (type)"
+	 */
+	private function discover_field_options( ?string $screen_key ): array {
 		$out = [];
 		// Meta Box exposes registered meta boxes via this filter. Calling apply_filters with []
 		// returns the full list registered by themes / extensions / MB Builder.
 		$meta_boxes = apply_filters( 'rwmb_meta_boxes', [] );
 		if ( ! is_array( $meta_boxes ) ) {
 			return [];
+		}
+		if ( $screen_key !== null ) {
+			$matched = array_values( array_filter( $meta_boxes, static fn( $mb ) => is_array( $mb ) && self::box_targets_screen( $mb, $screen_key ) ) );
+			if ( $matched !== [] || ObjectContext::from_screen( $screen_key ) !== ObjectContext::POST ) {
+				$meta_boxes = $matched;
+			}
 		}
 		foreach ( $meta_boxes as $mb ) {
 			$fields = $mb['fields'] ?? [];
@@ -111,10 +177,10 @@ final class MetaBoxFieldColumn extends BaseColumn implements SortableColumn, Fil
 		// Try rwmb_get_value first (returns formatted/structured data), fall back to raw meta.
 		$value = null;
 		if ( function_exists( 'rwmb_get_value' ) ) {
-			$value = rwmb_get_value( $field_id, [], $object_id );
+			$value = rwmb_get_value( $field_id, self::rwmb_args( $settings ), $object_id );
 		}
 		if ( $value === null || $value === '' || $value === false ) {
-			$raw = get_post_meta( $object_id, $field_id, true );
+			$raw = ObjectContext::get_meta( ObjectContext::from_settings( $settings ), $object_id, $field_id );
 			if ( $raw === '' || $raw === false || $raw === null ) {
 				return '';
 			}
@@ -186,7 +252,7 @@ final class MetaBoxFieldColumn extends BaseColumn implements SortableColumn, Fil
 			return '';
 		}
 		// For export prefer raw meta (machine-readable) over rwmb_get_value (formatted).
-		$raw = get_post_meta( $object_id, $field_id, true );
+		$raw = ObjectContext::get_meta( ObjectContext::from_settings( $settings ), $object_id, $field_id );
 		if ( $raw === '' || $raw === false || $raw === null ) {
 			return '';
 		}
@@ -260,7 +326,7 @@ final class MetaBoxFieldColumn extends BaseColumn implements SortableColumn, Fil
 		if ( $field_id === '' ) {
 			return '';
 		}
-		$val = get_post_meta( $object_id, $field_id, true );
+		$val = ObjectContext::get_meta( ObjectContext::from_settings( $settings ), $object_id, $field_id );
 		if ( $val === '' || $val === false || $val === null || is_array( $val ) || is_object( $val ) ) {
 			return '';
 		}
@@ -315,13 +381,9 @@ final class MetaBoxFieldColumn extends BaseColumn implements SortableColumn, Fil
 		}
 
 		// Capability parity with PostMetaColumn for protected meta keys.
-		if ( is_protected_meta( $field_id, 'post' ) ) {
-			$post_type   = get_post_type( $post_id );
-			$pt_obj      = $post_type ? get_post_type_object( $post_type ) : null;
-			$trusted_cap = $pt_obj->cap->edit_others_posts ?? 'edit_others_posts';
-			if ( ! current_user_can( $trusted_cap ) ) {
-				return;
-			}
+		$object = ObjectContext::from_settings( $settings );
+		if ( ! ObjectContext::can_write_key( $object, $post_id, $field_id ) ) {
+			return;
 		}
 
 		$type = (string) ( $field['type'] ?? '' );
@@ -332,51 +394,51 @@ final class MetaBoxFieldColumn extends BaseColumn implements SortableColumn, Fil
 					return; // '' = unchanged.
 				}
 				$on = in_array( strtolower( $raw_value ), [ '1', 'true', 'yes', 'on' ], true );
-				update_post_meta( $post_id, $field_id, $on ? 1 : 0 );
+				ObjectContext::update_meta( $object, $post_id, $field_id, $on ? 1 : 0 );
 				return;
 
 			case 'number':
 				if ( $raw_value === '' ) {
-					delete_post_meta( $post_id, $field_id );
+					ObjectContext::delete_meta( $object, $post_id, $field_id );
 					return;
 				}
 				if ( ! is_numeric( $raw_value ) ) {
 					return;
 				}
-				update_post_meta( $post_id, $field_id, $raw_value + 0 );
+				ObjectContext::update_meta( $object, $post_id, $field_id, $raw_value + 0 );
 				return;
 
 			case 'date':
 				if ( $raw_value === '' ) {
-					delete_post_meta( $post_id, $field_id );
+					ObjectContext::delete_meta( $object, $post_id, $field_id );
 					return;
 				}
 				$ts = strtotime( $raw_value );
 				if ( $ts === false ) {
 					return;
 				}
-				update_post_meta( $post_id, $field_id, gmdate( 'Y-m-d', $ts ) );
+				ObjectContext::update_meta( $object, $post_id, $field_id, gmdate( 'Y-m-d', $ts ) );
 				return;
 
 			case 'select':
 				if ( $raw_value === '' ) {
-					delete_post_meta( $post_id, $field_id );
+					ObjectContext::delete_meta( $object, $post_id, $field_id );
 					return;
 				}
 				$options = $this->get_edit_options( $settings );
 				if ( is_array( $options ) && ! array_key_exists( $raw_value, $options ) ) {
 					return; // Reject values outside the field's defined options.
 				}
-				update_post_meta( $post_id, $field_id, $raw_value );
+				ObjectContext::update_meta( $object, $post_id, $field_id, $raw_value );
 				return;
 
 			case 'text':
 			default:
 				if ( $raw_value === '' ) {
-					delete_post_meta( $post_id, $field_id );
+					ObjectContext::delete_meta( $object, $post_id, $field_id );
 					return;
 				}
-				update_post_meta( $post_id, $field_id, $raw_value );
+				ObjectContext::update_meta( $object, $post_id, $field_id, $raw_value );
 				return;
 		}
 	}
@@ -443,6 +505,20 @@ final class MetaBoxFieldColumn extends BaseColumn implements SortableColumn, Fil
 			10,
 			2
 		);
+	}
+
+	// ------------------------------------------------------------------
+	// MetaSortable — term + user screens
+	// ------------------------------------------------------------------
+
+	public function sort_meta_key( array $settings ): string {
+		return (string) ( $settings['field_id'] ?? '' );
+	}
+
+	public function sort_meta_type( array $settings ): string {
+		$field = $this->resolve_field( (string) ( $settings['field_id'] ?? '' ) );
+		$type  = $field !== null ? (string) ( $field['type'] ?? '' ) : '';
+		return in_array( $type, [ 'number', 'range', 'slider' ], true ) ? 'numeric' : 'string';
 	}
 
 	// ------------------------------------------------------------------

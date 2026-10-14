@@ -5,13 +5,22 @@ namespace ColumnKit\Integrations\ACF;
 
 use ColumnKit\Columns\BaseColumn;
 use ColumnKit\Columns\ConditionallyEditableColumn;
+use ColumnKit\Columns\ContextualColumn;
+use ColumnKit\Columns\MetaSortable;
 use ColumnKit\Columns\FilterableColumn;
 use ColumnKit\Columns\SortableColumn;
+use ColumnKit\Support\ObjectContext;
+use ColumnKit\Support\ScreenIdentifier;
 use WP_Query;
 use WP_Term;
 
 /**
  * Generic ACF field column — pick a field via dropdown, render type-aware.
+ *
+ * Works on post, media, taxonomy and user list screens. The field picker only offers fields
+ * from groups whose location rules target that screen (e.g. "Taxonomy is Genre"), and values
+ * are read/written through ACF's object-id convention (`term_{id}`, `user_{id}`) so ACF's own
+ * formatting and `_field` key references stay intact. Term/user screens sort via MetaSortable.
  *
  * Display + sort + filter, plus inline/bulk edit for field types that round-trip cleanly through
  * a single-input popover: true_false, text, email, url, password, number, range, date_picker, and
@@ -41,7 +50,7 @@ use WP_Term;
  *   wysiwyg / textarea → first 100 chars plain text
  *   text and unknown → string
  */
-final class ACFFieldColumn extends BaseColumn implements SortableColumn, FilterableColumn, ConditionallyEditableColumn {
+final class ACFFieldColumn extends BaseColumn implements SortableColumn, FilterableColumn, ConditionallyEditableColumn, ContextualColumn, MetaSortable {
 	/**
 	 * ACF field type => our popover input type. Anything not listed here is read-only.
 	 * 'select' covers select/radio/button_group (single-value only — see supports_inline_edit).
@@ -76,18 +85,33 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 	}
 
 	public function applies_to_screen( string $screen_key ): bool {
-		// ACF supports users and terms too, but our integration is post-based for v1.
-		return str_starts_with( $screen_key, 'post_type:' ) || $screen_key === 'media';
+		return str_starts_with( $screen_key, 'post_type:' )
+			|| $screen_key === 'media'
+			|| str_starts_with( $screen_key, 'taxonomy:' )
+			|| $screen_key === 'users';
 	}
 
 	public function settings_fields(): array {
+		return $this->fields_with_options( $this->discover_field_options( null ) );
+	}
+
+	public function settings_fields_for_screen( string $screen_key ): array {
+		return $this->fields_with_options( $this->discover_field_options( $screen_key ) );
+	}
+
+	/**
+	 * @param array<string, string> $options
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function fields_with_options( array $options ): array {
 		return [
 			[
 				'key'      => 'field_name',
 				'label'    => __( 'ACF Field', 'columnkit' ),
 				'type'     => 'select',
-				'options'  => $this->discover_field_options(),
+				'options'  => $options,
 				'required' => true,
+				'empty'    => __( 'No ACF field groups target this screen yet. In ACF, add a location rule such as "Taxonomy is …" or "User Form is …", then reload this page.', 'columnkit' ),
 			],
 		];
 	}
@@ -101,13 +125,26 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 		return $out;
 	}
 
-	/** @return array<string, string> field_name => "Label (type)" */
-	private function discover_field_options(): array {
+	/**
+	 * Field options for the picker. With a screen key, only groups whose location rules target
+	 * that screen; post screens fall back to every group when no rule matches (older configs
+	 * with unusual location params keep working).
+	 *
+	 * @return array<string, string> field_name => "Label (type)"
+	 */
+	private function discover_field_options( ?string $screen_key ): array {
 		if ( ! function_exists( 'acf_get_field_groups' ) || ! function_exists( 'acf_get_fields' ) ) {
 			return [];
 		}
+		$groups = acf_get_field_groups();
+		if ( $screen_key !== null ) {
+			$matched = array_values( array_filter( $groups, static fn( $g ) => is_array( $g ) && self::group_targets_screen( $g, $screen_key ) ) );
+			if ( $matched !== [] || ObjectContext::from_screen( $screen_key ) !== ObjectContext::POST ) {
+				$groups = $matched;
+			}
+		}
 		$out = [];
-		foreach ( acf_get_field_groups() as $group ) {
+		foreach ( $groups as $group ) {
 			$fields = acf_get_fields( $group );
 			if ( ! is_array( $fields ) ) {
 				continue;
@@ -124,15 +161,87 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 		return $out;
 	}
 
+	/**
+	 * Does any OR-branch of this field group's location rules target the screen?
+	 *
+	 * @param array<string, mixed> $group
+	 */
+	public static function group_targets_screen( array $group, string $screen_key ): bool {
+		$object    = ObjectContext::from_screen( $screen_key );
+		$taxonomy  = (string) ScreenIdentifier::taxonomy( $screen_key );
+		$post_type = ScreenIdentifier::is_media( $screen_key ) ? 'attachment' : (string) ScreenIdentifier::post_type( $screen_key );
+		$locations = is_array( $group['location'] ?? null ) ? $group['location'] : [];
+
+		foreach ( $locations as $and ) {
+			foreach ( is_array( $and ) ? $and : [] as $rule ) {
+				if ( ! is_array( $rule ) ) {
+					continue;
+				}
+				$param = (string) ( $rule['param'] ?? '' );
+				$op    = (string) ( $rule['operator'] ?? '==' );
+				$value = (string) ( $rule['value'] ?? '' );
+
+				if ( $object === ObjectContext::TERM ) {
+					if ( $param === 'taxonomy' && self::rule_hits( $op, $value, $taxonomy ) ) {
+						return true;
+					}
+					continue;
+				}
+				if ( $object === ObjectContext::USER ) {
+					if ( in_array( $param, [ 'user_form', 'user_role' ], true ) ) {
+						return true;
+					}
+					continue;
+				}
+				// Posts / media.
+				if ( $param === 'post_type' && self::rule_hits( $op, $value, $post_type ) ) {
+					return true;
+				}
+				if ( $post_type === 'attachment' && $param === 'attachment' ) {
+					return true;
+				}
+				if ( $post_type === 'page' && in_array( $param, [ 'page', 'page_type', 'page_parent', 'page_template' ], true ) ) {
+					return true;
+				}
+				if ( $post_type !== 'attachment' && in_array( $param, [ 'post', 'post_template', 'post_status', 'post_format', 'post_category', 'post_taxonomy' ], true ) ) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private static function rule_hits( string $op, string $value, string $subject ): bool {
+		if ( $op === '!=' ) {
+			return $value !== $subject && $value !== 'all';
+		}
+		return $value === $subject || $value === 'all';
+	}
+
+	/**
+	 * ACF's object id for get_field()/update_field(): posts are a bare ID, terms `term_{id}`,
+	 * users `user_{id}`.
+	 *
+	 * @param array<string, mixed> $settings
+	 * @return int|string
+	 */
+	public static function acf_id( int $object_id, array $settings ) {
+		return match ( ObjectContext::from_settings( $settings ) ) {
+			ObjectContext::TERM => 'term_' . $object_id,
+			ObjectContext::USER => 'user_' . $object_id,
+			default             => $object_id,
+		};
+	}
+
 	public function render( int $object_id, array $settings ): string {
 		$field_name = (string) ( $settings['field_name'] ?? '' );
 		if ( $field_name === '' || ! function_exists( 'get_field_object' ) ) {
 			return '';
 		}
-		$field = get_field_object( $field_name, $object_id );
+		$field = get_field_object( $field_name, self::acf_id( $object_id, $settings ) );
 		if ( ! is_array( $field ) ) {
-			// Fall back to raw meta if field doesn't exist on this post's groups.
-			$val = get_post_meta( $object_id, $field_name, true );
+			// Fall back to raw meta if the field doesn't exist on this object's groups.
+			$val = ObjectContext::get_meta( ObjectContext::from_settings( $settings ), $object_id, $field_name );
 			if ( $val === '' || $val === false || $val === null ) {
 				return '';
 			}
@@ -267,7 +376,7 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 		if ( $field_name === '' || ! function_exists( 'get_field' ) ) {
 			return '';
 		}
-		$value = get_field( $field_name, $object_id );
+		$value = get_field( $field_name, self::acf_id( $object_id, $settings ) );
 		if ( $value === null || $value === '' || $value === false ) {
 			return '';
 		}
@@ -331,7 +440,7 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 			return '';
 		}
 		// Unformatted value (3rd arg false): true_false → '1'/'0'/'', date_picker → stored Ymd.
-		$val = get_field( $name, $object_id, false );
+		$val = get_field( $name, self::acf_id( $object_id, $settings ), false );
 		if ( $val === null || $val === false || is_array( $val ) || is_object( $val ) ) {
 			return '';
 		}
@@ -390,16 +499,12 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 			return;
 		}
 
-		// Capability parity with PostMetaColumn: ACF's `_fieldname` reference (and rare
-		// underscore-prefixed field names) is protected meta. Only users trusted with other
-		// people's content may edit protected keys, even if an admin configured the column.
-		if ( is_protected_meta( $name, 'post' ) ) {
-			$post_type   = get_post_type( $post_id );
-			$pt_obj      = $post_type ? get_post_type_object( $post_type ) : null;
-			$trusted_cap = $pt_obj->cap->edit_others_posts ?? 'edit_others_posts';
-			if ( ! current_user_can( $trusted_cap ) ) {
-				return;
-			}
+		// Capability parity with PostMetaColumn: underscore-prefixed field names are protected
+		// meta. Only users trusted beyond the per-object edit cap may write them, even if an
+		// admin configured the column.
+		$object = ObjectContext::from_settings( $settings );
+		if ( ! ObjectContext::can_write_key( $object, $post_id, $name ) ) {
+			return;
 		}
 
 		$type = (string) ( $field['type'] ?? '' );
@@ -464,10 +569,10 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 
 		if ( function_exists( 'update_field' ) ) {
 			$key = (string) ( $field['key'] ?? '' );
-			update_field( $key !== '' ? $key : $name, $value_to_store, $post_id );
+			update_field( $key !== '' ? $key : $name, $value_to_store, self::acf_id( $post_id, $settings ) );
 			return;
 		}
-		update_post_meta( $post_id, $name, $value_to_store );
+		ObjectContext::update_meta( $object, $post_id, $name, $value_to_store );
 	}
 
 	/**
@@ -553,6 +658,20 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 			10,
 			2
 		);
+	}
+
+	// ------------------------------------------------------------------
+	// MetaSortable — term + user screens (ACF stores both as plain meta keyed by field name)
+	// ------------------------------------------------------------------
+
+	public function sort_meta_key( array $settings ): string {
+		return (string) ( $settings['field_name'] ?? '' );
+	}
+
+	public function sort_meta_type( array $settings ): string {
+		$field = $this->resolve_field( (string) ( $settings['field_name'] ?? '' ) );
+		$type  = $field !== null ? (string) ( $field['type'] ?? '' ) : '';
+		return in_array( $type, [ 'number', 'range' ], true ) ? 'numeric' : 'string';
 	}
 
 	// ------------------------------------------------------------------

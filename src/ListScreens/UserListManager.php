@@ -8,6 +8,7 @@ use ColumnKit\ColumnRegistry;
 use ColumnKit\Columns\MetaSortable;
 use ColumnKit\Settings\SettingsRepository;
 use ColumnKit\Support\ColumnPresenter;
+use ColumnKit\Support\MetaSortSql;
 use ColumnKit\Support\SetResolver;
 use WP_User_Query;
 
@@ -86,10 +87,26 @@ final class UserListManager {
 			if ( $key === '' ) {
 				return;
 			}
-			$order = strtoupper( (string) $query->get( 'order' ) ) === 'ASC' ? 'ASC' : 'DESC';
-			$query->set( 'meta_key', $key );
-			$query->set( 'orderby', 'meta_value' );
-			$query->set( 'order', $order );
+			$order = MetaSortSql::order( (string) $query->get( 'order' ) );
+			$type  = $col->sort_meta_type( $settings );
+
+			// LEFT JOIN rather than meta_key/orderby=meta_value, which INNER JOINs and hides
+			// every user without the meta (see MetaSortSql). Bound to this query object only.
+			$query->set( 'orderby', 'login' );
+			$callback = static function ( WP_User_Query $q ) use ( $query, $key, $type, $order, &$callback ) {
+				if ( $q !== $query ) {
+					return;
+				}
+				remove_action( 'pre_user_query', $callback );
+				global $wpdb;
+				$alias           = 'ck_usort';
+				$q->query_from  .= $wpdb->prepare(
+					" LEFT JOIN {$wpdb->usermeta} AS {$alias} ON {$wpdb->users}.ID = {$alias}.user_id AND {$alias}.meta_key = %s",
+					$key
+				);
+				$q->query_orderby = 'ORDER BY ' . MetaSortSql::expression( $alias, $type ) . " {$order}, {$wpdb->users}.user_login ASC";
+			};
+			add_action( 'pre_user_query', $callback );
 			return;
 		}
 	}
@@ -130,6 +147,7 @@ final class UserListManager {
 		$set_id  = isset( $_GET[ SetResolver::REQUEST_PARAM ] ) && is_string( $_GET[ SetResolver::REQUEST_PARAM ] )
 			? SettingsRepository::sanitize_set_id( wp_unslash( $_GET[ SetResolver::REQUEST_PARAM ] ) )
 			: SettingsRepository::DEFAULT_SET;
+		$set_id  = SetResolver::allowed( $this->repository, 'users', $set_id ); // Role-restricted views.
 		$columns = $this->repository->get_columns( 'users', $set_id );
 		if ( empty( $columns ) ) {
 			wp_die( esc_html__( 'No columns configured for this screen.', 'columnkit' ), '', [ 'response' => 400 ] );

@@ -13,7 +13,7 @@
 	box-sizing: border-box;
 }
 
-.ck-cell.ck-editable:hover {
+.ck-cell.ck-editable:not(.ck-has-trigger):hover {
 	background-color: #f0f6fc;
 	box-shadow: 0 0 0 1px #2271b1 inset;
 }
@@ -73,28 +73,51 @@
  * ------------------------------------------------------------------ */
 
 .ck-edit-trigger {
-	display: none;
-	background: transparent;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	visibility: hidden;
+	width: 24px;
+	height: 24px;
+	margin-left: 6px;
+	padding: 0;
 	border: 1px solid transparent;
+	border-radius: 4px;
+	background: transparent;
 	color: #2271b1;
 	cursor: pointer;
-	padding: 2px 7px;
-	margin-left: 8px;
-	font-size: 15px;
-	line-height: 1;
 	vertical-align: middle;
-	border-radius: 3px;
-	font-family: inherit;
 }
-.ck-cell.ck-editable:hover .ck-edit-trigger {
-	display: inline-block;
+.ck-edit-trigger .dashicons {
+	width: 16px;
+	height: 16px;
+	font-size: 16px;
+	line-height: 1;
+}
+/* Show the pencil whenever the ROW is hovered or focused — the same moment WordPress shows
+ * its row actions — so editable cells are discoverable without hunting cell by cell. */
+.wp-list-table tr:hover .ck-edit-trigger,
+.wp-list-table tr:focus-within .ck-edit-trigger,
+.ck-cell.ck-editing .ck-edit-trigger {
+	visibility: visible;
 }
 .ck-edit-trigger:hover,
 .ck-edit-trigger:focus {
 	background: #2271b1;
+	border-color: #2271b1;
 	color: #fff;
 	outline: none;
-	border-color: #2271b1;
+}
+/* Title / term Name: the wrapper holds a <strong>; keep it inline with the pencil. */
+.ck-cell.ck-has-trigger > strong {
+	display: inline;
+}
+/* Plain (custom) cells: faint pencil on row hover, full on cell hover. */
+.wp-list-table tr:hover .ck-cell.ck-editable:not(.ck-has-trigger)::after {
+	opacity: 0.45;
+}
+.wp-list-table tr:hover .ck-cell.ck-editable:not(.ck-has-trigger):hover::after {
+	opacity: 0.9;
 }
 
 /* ------------------------------------------------------------------
@@ -143,6 +166,79 @@
 .ck-edit-popover .ck-status.success { color: #00a32a; }
 .ck-edit-popover .ck-cancel {
 	color: #646970;
+}
+.ck-edit-popover textarea.ck-input {
+	min-width: 320px;
+	resize: vertical;
+}
+
+/* Term checklist */
+.ck-edit-popover.ck-input-terms {
+	width: 280px;
+}
+.ck-terms {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.ck-terms-search,
+.ck-terms-new {
+	width: 100%;
+	box-sizing: border-box;
+}
+.ck-terms-list {
+	max-height: 220px;
+	margin: 0;
+	padding: 4px;
+	overflow-y: auto;
+	border: 1px solid #dcdcde;
+	border-radius: 3px;
+	list-style: none;
+}
+.ck-terms-list li {
+	margin: 0;
+}
+.ck-terms-list label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 4px;
+	border-radius: 3px;
+	cursor: pointer;
+}
+.ck-terms-list label:hover {
+	background: #f0f6fc;
+}
+.ck-terms-list input[type="checkbox"] {
+	margin: 0;
+}
+.ck-terms-empty {
+	padding: 6px;
+	color: #646970;
+}
+
+/* Featured image picker */
+.ck-media {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.ck-media-preview img {
+	display: block;
+	max-width: 160px;
+	height: auto;
+	border-radius: 3px;
+}
+.ck-media-preview:empty {
+	display: none;
+}
+.ck-media-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.ck-media-remove {
+	color: #b32d2e;
 }
 
 /* ------------------------------------------------------------------

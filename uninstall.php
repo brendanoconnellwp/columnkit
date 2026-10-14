@@ -17,6 +17,10 @@ $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name = 'ck_version' OR 
 // Per-user "active column set" preferences (ck_active_set_<screen>), written by SetResolver.
 $wpdb->query( "DELETE FROM {$wpdb->usermeta} WHERE meta_key LIKE 'ck\\_active\\_set\\_%'" );
 
+// Cached word counts (WordCountColumn) and the built-in column snapshot (NativeColumns).
+$wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE meta_key = '_ck_word_count'" );
+$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name = 'ck_native_columns'" );
+
 if ( is_multisite() ) {
 	$wpdb->query( "DELETE FROM {$wpdb->sitemeta} WHERE meta_key = 'ck_version' OR meta_key LIKE 'ck\\_screen\\_%'" );
 }

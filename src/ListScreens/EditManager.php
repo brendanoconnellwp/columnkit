@@ -41,9 +41,9 @@ final class EditManager {
 	 *   - cap: capability required for this specific edit (in addition to edit_post on the row)
 	 */
 	private const CORE_FIELDS = [
-		'title'  => [ 'input' => 'text',   'td_class' => 'column-title',  'cap' => null ],
-		'date'   => [ 'input' => 'date',   'td_class' => 'column-date',   'cap' => null ],
-		'author' => [ 'input' => 'select', 'td_class' => 'column-author', 'cap' => 'edit_others_posts' ],
+		'title'  => [ 'input' => 'text',   'td_class' => 'column-title',  'cap' => null, 'wrap' => 'strong' ],
+		'date'   => [ 'input' => 'date',   'td_class' => 'column-date',   'cap' => null, 'wrap' => '' ],
+		'author' => [ 'input' => 'select', 'td_class' => 'column-author', 'cap' => 'edit_others_posts', 'wrap' => '' ],
 	];
 
 	/** @var array<int, array<string, mixed>> */
@@ -124,6 +124,7 @@ final class EditManager {
 		}
 
 		$screen_key = 'post_type:' . $post->post_type;
+		$set_id     = \ColumnKit\Support\SetResolver::allowed( $this->repository, $screen_key, $set_id );
 		$columns    = $this->repository->get_columns( $screen_key, $set_id );
 		$entry      = null;
 		foreach ( $columns as $candidate ) {
@@ -142,6 +143,10 @@ final class EditManager {
 			wp_send_json_error( [ 'message' => __( 'Column is not editable.', 'columnkit' ) ], 400 );
 		}
 
+		if ( $col->get_edit_input_type( $settings ) === 'textarea' && isset( $_POST['value'] ) && is_scalar( $_POST['value'] ) ) {
+			// Multi-line fields (excerpts): sanitize_text_field() above flattened the newlines.
+			$value = sanitize_textarea_field( wp_unslash( (string) $_POST['value'] ) );
+		}
 		$col->save_value( $post_id, $value, $settings );
 
 		// Re-render the cell (the column's render() returns escaped HTML) and read back the raw value.
@@ -174,6 +179,7 @@ final class EditManager {
 		}
 
 		// Resolve + authorise the screen for this object type.
+		$taxonomy = '';
 		if ( $object === 'user' ) {
 			if ( $screen !== 'users' ) {
 				wp_send_json_error( [ 'message' => __( 'Unknown screen.', 'columnkit' ) ], 400 );
@@ -194,7 +200,24 @@ final class EditManager {
 			}
 		}
 
-		$entry = null;
+		// WordPress's own columns: term Name / Slug / Description, user Email / Role.
+		if ( str_starts_with( $col_id, self::CORE_PREFIX ) ) {
+			$field = substr( $col_id, strlen( self::CORE_PREFIX ) );
+			if ( $field === 'description' && isset( $_POST['value'] ) && is_scalar( $_POST['value'] ) ) {
+				// Term descriptions are multi-line; sanitize_text_field() above flattened them.
+				$value = sanitize_textarea_field( wp_unslash( (string) $_POST['value'] ) );
+			}
+			$result = $object === 'user'
+				? CoreFields::save_user_field( $object_id, $field, $value )
+				: CoreFields::save_term_field( $object_id, $taxonomy, $field, $value );
+			if ( is_wp_error( $result ) ) {
+				wp_send_json_error( [ 'message' => $result->get_error_message() ], 400 );
+			}
+			wp_send_json_success( $result );
+		}
+
+		$set_id = \ColumnKit\Support\SetResolver::allowed( $this->repository, $screen, $set_id ); // Role-restricted views.
+		$entry  = null;
 		foreach ( $this->repository->get_columns( $screen, $set_id ) as $candidate ) {
 			if ( ( $candidate['id'] ?? '' ) === $col_id ) {
 				$entry = $candidate;
@@ -311,6 +334,21 @@ final class EditManager {
 	// ------------------------------------------------------------------
 
 	private function save_core_field( WP_Post $post, string $field, string $value ): void {
+		// Taxonomy columns (categories / tags / taxonomy-{slug}) — terms picker.
+		$taxonomy = \ColumnKit\Support\TermAssigner::taxonomy_from_core_key( $field );
+		if ( $taxonomy !== '' ) {
+			$result = \ColumnKit\Support\TermAssigner::assign( $post, $taxonomy, $value );
+			if ( is_wp_error( $result ) ) {
+				wp_send_json_error( [ 'message' => $result->get_error_message() ], 400 );
+			}
+			wp_send_json_success(
+				[
+					'html' => \ColumnKit\Support\TermAssigner::render_links( $post, $taxonomy ),
+					'raw'  => \ColumnKit\Support\TermAssigner::raw_value( $post->ID, $taxonomy ),
+				]
+			);
+		}
+
 		if ( ! isset( self::CORE_FIELDS[ $field ] ) ) {
 			wp_send_json_error( [ 'message' => __( 'Unknown core field.', 'columnkit' ) ], 400 );
 		}
@@ -338,8 +376,10 @@ final class EditManager {
 				}
 				$update['post_title'] = $value;
 				$new_raw  = $value;
-				$new_html = '<strong><a class="row-title" href="' . esc_url( get_edit_post_link( $post->ID ) ) . '">'
-					. esc_html( $value ) . '</a></strong>';
+				// Keep the " — Draft / Private / Pending" state the title cell shows.
+				$states   = function_exists( '_post_states' ) ? (string) _post_states( $post, false ) : '';
+				$new_html = '<strong><a class="row-title" href="' . esc_url( (string) get_edit_post_link( $post->ID ) ) . '">'
+					. esc_html( $value ) . '</a>' . $states . '</strong>';
 				break;
 
 			case 'date':
@@ -400,6 +440,8 @@ final class EditManager {
 			$entry = [
 				'input'    => $spec['input'],
 				'td_class' => $spec['td_class'],
+				'column'   => $field,
+				'wrap'     => $spec['wrap'],
 			];
 			if ( $field === 'author' ) {
 				$entry['options'] = self::author_options();
@@ -462,8 +504,8 @@ final class EditManager {
 		$out = [];
 		foreach ( $this->active_columns as $entry ) {
 			$col = $this->registry->get( (string) ( $entry['type'] ?? '' ) );
-			if ( ! $col instanceof EditableColumn ) {
-				continue;
+			if ( ! $col instanceof EditableColumn || $col instanceof \ColumnKit\Columns\InlineOnlyEditable ) {
+				continue; // Inline-only columns (media / term pickers) have no bulk-edit input.
 			}
 			$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
 			if ( Editability::is_editable( $col, $settings ) ) {

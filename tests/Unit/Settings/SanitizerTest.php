@@ -156,4 +156,20 @@ final class SanitizerTest extends TestCase {
 		// value_type falls back to 'string' when unknown.
 		$this->assertSame( 'string', $out[0]['settings']['value_type'] );
 	}
+	public function test_contextual_column_gets_object_from_screen_not_payload(): void {
+		$registry = new ColumnRegistry();
+		$registry->register( new class() extends \ColumnKit\Columns\BaseColumn implements \ColumnKit\Columns\ContextualColumn {
+			public function get_type(): string { return 'ctx'; }
+			public function get_label(): string { return 'Ctx'; }
+			public function render( int $object_id, array $settings ): string { return ''; }
+			public function settings_fields(): array { return [ [ 'key' => 'field', 'label' => 'F', 'type' => 'text' ] ]; }
+			public function settings_fields_for_screen( string $screen_key ): array { return $this->settings_fields(); }
+		} );
+		\Brain\Monkey\Functions\when( 'sanitize_key' )->returnArg();
+		$out = ( new Sanitizer( $registry ) )->sanitize_columns(
+			[ [ 'id' => 'a', 'type' => 'ctx', 'settings' => [ 'field' => 'x', 'object' => 'user', 'taxonomy' => 'evil' ] ] ],
+			'taxonomy:genre'
+		);
+		$this->assertSame( [ 'field' => 'x', 'object' => 'term', 'taxonomy' => 'genre' ], $out[0]['settings'] );
+	}
 }

@@ -10,7 +10,7 @@ Built as a six-phase exercise, with security and performance pitfalls documented
 
 | Surface | Feature |
 |---|---|
-| Settings page (`Settings → Admin Columns`) | Pick a screen → choose/create a **view** → searchable **Add column** picker → collapsible, drag-reorderable rows with per-field help and a **Display** panel → save |
+| Column editor (`Settings → Admin Columns`, or the **Columns** button on any list table) | Every list screen in a searchable sidebar → choose/create a **view** → one drag-reorderable table of **WordPress's built-in columns** (rename / hide / resize) and **your custom columns** → **Add column** picker grouped by source, listing each ACF / Meta Box / JetEngine field directly → save (Ctrl/⌘+S) |
 | Column Sets (saved views) | Define multiple named column layouts per screen ("SEO view", "Editorial view"…). Switch between them from a dropdown above the list table; each user's choice is remembered per screen. Inline-edit, bulk-edit, and export follow the active view |
 | Per-column display formatting | Width, text alignment, prefix/suffix, and an optional coloured badge/pill (text + background colour) — set per column in the row's **Display** panel. Prefix/suffix flow through to export |
 | Post / Page / CPT / Media list tables | Custom columns, sortable headers, filter inputs above the table |
@@ -20,7 +20,9 @@ Built as a six-phase exercise, with security and performance pitfalls documented
 | Bulk Edit | WP's native panel with our fields + apply-checkbox per column |
 | Export buttons above the list | CSV or JSON of the current filtered/sorted view |
 | Settings page | Export/import the full column configuration as JSON |
-| ACF / Meta Box / JetEngine / WooCommerce / Yoast | Auto-detected; their fields show up as available column types when their host plugin is active |
+| Post-field columns | Status, Slug, Excerpt, Word count / Reading time, Last modified, Modified by, Permalink, Parent, Order, Template, Attachments / children, Sticky, Comments open — sortable, and inline-editable where it makes sense |
+| Role-restricted views | Limit a view to roles; those users get it by default, others never see it |
+| ACF / Meta Box / JetEngine / WooCommerce / Yoast | Auto-detected; their fields show up as available column types when their host plugin is active. ACF / Meta Box / JetEngine fields work on **posts, taxonomy term lists and Users** — the picker only offers fields whose location targets that screen, and they're sortable + inline-editable there |
 
 ---
 
@@ -28,8 +30,8 @@ Built as a six-phase exercise, with security and performance pitfalls documented
 
 1. Activate the plugin: `Plugins → ColumnKit → Activate`
 2. Visit `Settings → Admin Columns`
-3. Pick a screen (e.g. **Posts — Posts**, or **Users**), click **Add Column**
-4. Configure (label, meta key, value type for post-meta columns) and **Save Columns**
+3. Pick a screen in the sidebar (e.g. **Posts**, **Categories**, **Users**) — or click **Columns** next to the title of any list table
+4. Drag, rename or hide the built-in columns; **Add column** → pick a field (ACF fields appear by name) → **Save changes**
 5. Visit the list table for that screen — your columns appear
 
 To inline-edit a value:
@@ -178,17 +180,21 @@ WP core's `update_plugins_github.com` filter: it checks the latest release (cach
 transient, failures cached 1h), and when the release version beats the installed one, wp-admin
 shows the native "update available" row and one-click installs the release zip.
 
-**Release process:** bump the version in `columnkit.php` (header + `CK_VERSION` must agree) and
-`readme.txt`, merge to main, then push a tag:
+**Release process:** bump the version in `columnkit.php` (header + `CK_VERSION` must agree), set
+`Stable tag` and add a `= X.Y.Z =` changelog entry in `readme.txt`, and merge to main. That's it:
 
-```bash
-git tag v0.6.0 && git push origin v0.6.0
-```
+1. The Release workflow sees `columnkit.php` change on main, reads the version, and — if tag
+   `vX.Y.Z` doesn't exist yet — builds `columnkit-X.Y.Z.zip` (dev files excluded, single
+   `columnkit/` folder so in-place upgrades work), creates the tag, and publishes the GitHub
+   release. The release notes are that version's changelog block from `readme.txt`.
+   Merges that don't bump the version are no-ops.
+2. Sites see the update on their next check (twice-daily cron or a Plugins-page visit). To check
+   immediately, click **Check for updates** under ColumnKit on the Plugins screen.
+3. **View details** on the update row opens WP's standard details modal with the release's
+   changelog, served from GitHub (`plugins_api` filter).
 
-The Release workflow verifies the tag matches the plugin version, builds `columnkit-{v}.zip`
-(dev files excluded, single `columnkit/` folder so in-place upgrades work), and publishes the
-GitHub release. Sites pick it up on the next update check (`wp cron` / visiting the Plugins page;
-force with `wp plugin update --all --dry-run` or "Check again" on Dashboard → Updates).
+Pushing a tag by hand (`git tag v0.7.0 && git push origin v0.7.0`) or running the workflow from the
+Actions tab still works; both verify the tag matches `columnkit.php`.
 
 **Private repo?** Release-asset downloads then need auth: create one fine-grained read-only PAT
 for this repo and add `define( 'CK_GITHUB_TOKEN', '...' );` to each site's `wp-config.php` — the

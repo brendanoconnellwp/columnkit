@@ -9,6 +9,7 @@ use ColumnKit\Columns\EditableColumn;
 use ColumnKit\Settings\SettingsRepository;
 use ColumnKit\Support\ColumnPresenter;
 use ColumnKit\Support\Editability;
+use ColumnKit\Support\NativeColumns;
 use ColumnKit\Support\ScreenIdentifier;
 use ColumnKit\Support\SetResolver;
 
@@ -35,6 +36,9 @@ final class ListScreenManager {
 
 	/** @var array<int, array<string, mixed>> Currently-applied column definitions for this request. */
 	private array $active_columns = [];
+
+	/** @var array<string, mixed> Layout (order + built-in overrides) for the active set, or []. */
+	private array $active_layout = [];
 
 	public function __construct(
 		private ColumnRegistry $registry,
@@ -76,10 +80,17 @@ final class ListScreenManager {
 			return;
 		}
 
+		// Runs last on the screen's final header filter: snapshot the built-in columns for the
+		// column editor, then apply the saved layout (order / rename / hide). Hooked for every
+		// list screen — the snapshot is useful even before anything is configured.
+		$this->header_screen_key = $screen_key;
+		add_filter( "manage_{$screen->id}_columns", [ $this, 'finalize_headers' ], PHP_INT_MAX - 10 );
+
 		// Resolve which saved view (column set) this user is looking at, then load its columns.
 		$this->active_set_id = SetResolver::resolve( $this->repository, $screen_key );
 		$columns             = $this->repository->get_columns( $screen_key, $this->active_set_id );
-		if ( empty( $columns ) ) {
+		$this->active_layout = $this->repository->get_layout( $screen_key, $this->active_set_id );
+		if ( empty( $columns ) && $this->active_layout === [] ) {
 			return;
 		}
 
@@ -133,6 +144,69 @@ final class ListScreenManager {
 		$this->wire_post_extras( $post_type, $columns );
 	}
 
+	private string $header_screen_key = '';
+
+	/**
+	 * Final pass over the list table's headers: capture the built-ins, then apply the layout.
+	 *
+	 * Layout rules: the checkbox column stays first; columns follow the saved order; built-ins
+	 * marked hidden are dropped and renamed ones relabelled; anything not in the saved order
+	 * (a plugin activated later, a custom column added outside the editor) is appended so
+	 * nothing silently disappears.
+	 *
+	 * @param array<string, string> $columns
+	 * @return array<string, string>
+	 */
+	public function finalize_headers( $columns ) {
+		if ( ! is_array( $columns ) ) {
+			return $columns;
+		}
+		if ( $this->header_screen_key !== '' ) {
+			NativeColumns::capture( $this->header_screen_key, $columns );
+		}
+		return self::apply_layout( $columns, $this->active_layout );
+	}
+
+	/**
+	 * @param array<string, string> $columns
+	 * @param array<string, mixed>  $layout
+	 * @return array<string, string>
+	 */
+	public static function apply_layout( array $columns, array $layout ): array {
+		$native = is_array( $layout['native'] ?? null ) ? $layout['native'] : [];
+		if ( $native === [] ) {
+			return $columns; // No layout — legacy behaviour (our columns appended).
+		}
+		$order = is_array( $layout['order'] ?? null ) ? $layout['order'] : [];
+
+		$out = [];
+		if ( isset( $columns['cb'] ) ) {
+			$out['cb'] = $columns['cb'];
+		}
+		$place = static function ( string $key ) use ( &$out, $columns, $native ): void {
+			if ( isset( $out[ $key ] ) || ! array_key_exists( $key, $columns ) ) {
+				return;
+			}
+			if ( isset( $native[ $key ] ) ) {
+				if ( ! empty( $native[ $key ]['hidden'] ) ) {
+					return;
+				}
+				$label = (string) ( $native[ $key ]['label'] ?? '' );
+				// Keep the original header markup (icons, sort affordances) unless renamed.
+				$out[ $key ] = $label !== '' ? esc_html( $label ) : $columns[ $key ];
+				return;
+			}
+			$out[ $key ] = $columns[ $key ];
+		};
+		foreach ( $order as $key ) {
+			$place( (string) $key );
+		}
+		foreach ( array_keys( $columns ) as $key ) {
+			$place( (string) $key );
+		}
+		return $out;
+	}
+
 	/** The set the current viewer is looking at. */
 	public function active_set_id(): string {
 		return $this->active_set_id;
@@ -172,7 +246,7 @@ final class ListScreenManager {
 	 * (filters, search, sort). Only shown when the screen has more than one saved view.
 	 */
 	private function render_view_switcher( string $screen_key ): void {
-		$sets = $this->repository->get_sets( $screen_key );
+		$sets = SetResolver::visible_sets( $this->repository, $screen_key ); // Only views this user may see.
 		if ( count( $sets ) < 2 ) {
 			return;
 		}
@@ -221,6 +295,15 @@ final class ListScreenManager {
 
 			if ( $decls ) {
 				$rules[] = '.wp-list-table .column-ck_' . $id . '{' . implode( ';', $decls ) . '}';
+			}
+		}
+		$native = is_array( $this->active_layout['native'] ?? null ) ? $this->active_layout['native'] : [];
+		foreach ( $native as $key => $cfg ) {
+			$key   = preg_replace( '/[^A-Za-z0-9_\-]/', '', (string) $key );
+			$width = is_array( $cfg ) ? (string) ( $cfg['width'] ?? '' ) : '';
+			if ( $key !== '' && preg_match( '/^\d+(px|%|em|rem)?$/', $width ) === 1 ) {
+				$unit    = preg_match( '/(px|%|em|rem)$/', $width ) ? '' : 'px';
+				$rules[] = '.wp-list-table .column-' . $key . '{width:' . $width . $unit . '}';
 			}
 		}
 		if ( $rules ) {
@@ -277,6 +360,7 @@ final class ListScreenManager {
 				if ( is_array( $options ) && $options !== [] ) {
 					$options_attr = ' data-ck-options="' . esc_attr( (string) wp_json_encode( $options ) ) . '"';
 				}
+				$options_attr .= self::extra_edit_attrs( $col, $settings );
 				printf(
 					'<span class="ck-cell ck-editable" data-ck-col="%s" data-ck-input="%s"%s data-ck-raw="%s">%s</span>',
 					esc_attr( $id ),
@@ -322,6 +406,7 @@ final class ListScreenManager {
 				if ( is_array( $options ) && $options !== [] ) {
 					$options_attr = ' data-ck-options="' . esc_attr( (string) wp_json_encode( $options ) ) . '"';
 				}
+				$options_attr .= self::extra_edit_attrs( $col, $settings );
 				return sprintf(
 					'<span class="ck-cell ck-editable" data-ck-col="%s" data-ck-object="%s" data-ck-id="%d" data-ck-input="%s"%s data-ck-raw="%s">%s</span>',
 					esc_attr( $id ),
@@ -336,6 +421,25 @@ final class ListScreenManager {
 			return $html;
 		}
 		return $value;
+	}
+
+	/**
+	 * data-ck-* attributes a column asks for (EditAttributes), already escaped.
+	 *
+	 * @param array<string, mixed> $settings
+	 */
+	private static function extra_edit_attrs( object $col, array $settings ): string {
+		if ( ! $col instanceof \ColumnKit\Columns\EditAttributes ) {
+			return '';
+		}
+		$out = '';
+		foreach ( $col->edit_attributes( $settings ) as $key => $value ) {
+			$key = preg_replace( '/[^a-z0-9-]/', '', strtolower( (string) $key ) );
+			if ( $key !== '' ) {
+				$out .= ' data-ck-' . $key . '="' . esc_attr( (string) $value ) . '"';
+			}
+		}
+		return $out;
 	}
 
 	/**
