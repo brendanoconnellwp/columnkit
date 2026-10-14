@@ -59,6 +59,15 @@ final class GitHubUpdater {
 		add_filter( 'plugin_row_meta', [ $this, 'row_meta' ], 10, 2 );
 		add_action( 'admin_post_' . self::CHECK_ACTION, [ $this, 'handle_check_now' ] );
 		add_action( 'admin_notices', [ $this, 'render_checked_notice' ] );
+		// WP's "Check again" (Dashboard → Updates, force-check) deletes core's update_plugins
+		// site transient; mirror that so a forced check reaches GitHub instead of serving our
+		// cached (possibly failed) lookup for up to 6 more hours.
+		add_action( 'delete_site_transient_update_plugins', [ $this, 'flush_transient' ] );
+	}
+
+	/** Drop the cached release lookup so the next check hits the GitHub API fresh. */
+	public function flush_transient(): void {
+		delete_transient( self::TRANSIENT );
 	}
 
 	/**
