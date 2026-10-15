@@ -92,7 +92,7 @@ final class UserMetaColumn extends BaseColumn implements EditableColumn, MetaSor
 
 	public function save_value( int $object_id, string $raw_value, array $settings ): void {
 		$key = (string) ( $settings['meta_key'] ?? '' );
-		if ( $key === '' ) {
+		if ( $key === '' || ! \ColumnKit\Support\ObjectContext::can_write_key( \ColumnKit\Support\ObjectContext::USER, $object_id, $key ) ) {
 			return;
 		}
 		// Convention mirrors PostMetaColumn: an empty string clears the meta.

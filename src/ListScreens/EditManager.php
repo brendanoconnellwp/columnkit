@@ -51,6 +51,8 @@ final class EditManager {
 
 	private string $post_type = '';
 
+	private bool $in_bulk_save = false;
+
 	public function __construct(
 		private ColumnRegistry $registry,
 		private SettingsRepository $repository
@@ -184,7 +186,12 @@ final class EditManager {
 			if ( $screen !== 'users' ) {
 				wp_send_json_error( [ 'message' => __( 'Unknown screen.', 'columnkit' ) ], 400 );
 			}
-			if ( ! current_user_can( 'edit_user', $object_id ) ) {
+			// edit_user alone is not enough: core grants it on your OWN account to every role, and
+			// the inline nonce is handed out on the Posts list too. Require the Users screen's own
+			// cap, and edit_users for self-edits, so a Contributor can't write fields onto themselves.
+			if ( ! current_user_can( 'list_users' )
+				|| ! current_user_can( 'edit_user', $object_id )
+				|| ( $object_id === get_current_user_id() && ! current_user_can( 'edit_users' ) ) ) {
 				wp_send_json_error( [ 'message' => __( 'You cannot edit this user.', 'columnkit' ) ], 403 );
 			}
 		} else { // term
@@ -194,6 +201,12 @@ final class EditManager {
 			$taxonomy = substr( $screen, strlen( 'taxonomy:' ) );
 			if ( ! taxonomy_exists( $taxonomy ) ) {
 				wp_send_json_error( [ 'message' => __( 'Unknown taxonomy.', 'columnkit' ) ], 404 );
+			}
+			// The column config comes from $screen, so the term must really belong to that taxonomy —
+			// otherwise a column configured for taxonomy B could be written onto a term in A.
+			$term = get_term( $object_id );
+			if ( ! $term instanceof \WP_Term || $term->taxonomy !== $taxonomy ) {
+				wp_send_json_error( [ 'message' => __( 'Term not found.', 'columnkit' ) ], 404 );
 			}
 			if ( ! current_user_can( 'edit_term', $object_id ) ) {
 				wp_send_json_error( [ 'message' => __( 'You cannot edit this term.', 'columnkit' ) ], 403 );
@@ -293,20 +306,42 @@ final class EditManager {
 		if ( ! current_user_can( 'edit_post', $post_id ) ) {
 			return;
 		}
-		if ( ! isset( $_POST[ self::INPUT_BULK ] ) || ! is_array( $_POST[ self::INPUT_BULK ] ) ) {
+		// The Posts list form (#posts-filter) submits Bulk Edit by GET and core's bulk_edit_posts()
+		// reads $_REQUEST, so read the same superglobal — $_POST is empty on a real bulk edit.
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- verified just below.
+		if ( ! isset( $_REQUEST[ self::INPUT_BULK ] ) || ! is_array( $_REQUEST[ self::INPUT_BULK ] ) ) {
 			return;
 		}
 
-		$nonce = isset( $_POST['_wpnonce'] ) && is_string( $_POST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ) : '';
+		$nonce = isset( $_REQUEST['_wpnonce'] ) && is_string( $_REQUEST['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['_wpnonce'] ) ) : '';
 		if ( ! wp_verify_nonce( $nonce, 'bulk-posts' ) ) {
 			return;
 		}
 
-		$values_by_col = wp_unslash( (array) $_POST[ self::INPUT_BULK ] );
-		$apply         = isset( $_POST[ self::INPUT_APPLY ] ) && is_array( $_POST[ self::INPUT_APPLY ] )
-			? array_map( 'sanitize_key', array_keys( $_POST[ self::INPUT_APPLY ] ) )
+		$values_by_col = wp_unslash( (array) $_REQUEST[ self::INPUT_BULK ] );
+		$apply         = isset( $_REQUEST[ self::INPUT_APPLY ] ) && is_array( $_REQUEST[ self::INPUT_APPLY ] )
+			? array_map( 'sanitize_key', array_keys( $_REQUEST[ self::INPUT_APPLY ] ) )
 			: [];
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
+		// Post-field columns save through wp_update_post(), which fires save_post again for the
+		// same post — don't re-enter and re-apply every column on that nested call.
+		if ( $this->in_bulk_save ) {
+			return;
+		}
+		$this->in_bulk_save = true;
+		try {
+			$this->apply_bulk_values( $post_id, $values_by_col, $apply );
+		} finally {
+			$this->in_bulk_save = false;
+		}
+	}
+
+	/**
+	 * @param array<string, mixed> $values_by_col
+	 * @param string[]             $apply
+	 */
+	private function apply_bulk_values( int $post_id, array $values_by_col, array $apply ): void {
 		foreach ( $this->editable_entries() as $entry ) {
 			$col_id = (string) ( $entry['id'] ?? '' );
 			if ( $col_id === '' || ! in_array( $col_id, $apply, true ) ) {
@@ -402,7 +437,11 @@ final class EditManager {
 			case 'author':
 				$author_id = (int) $value;
 				$user      = $author_id > 0 ? get_userdata( $author_id ) : false;
-				if ( ! $user || ! user_can( $user, 'edit_posts' ) ) {
+				// Same test as core's author dropdown: the new author must be able to edit THIS
+				// post type (its mapped cap), and on multisite be a member of this site.
+				$pt_cap    = get_post_type_object( $post->post_type )->cap->edit_posts ?? 'edit_posts';
+				if ( ! $user || ! user_can( $user, $pt_cap )
+					|| ( is_multisite() && ! is_user_member_of_blog( $author_id ) ) ) {
 					wp_send_json_error( [ 'message' => __( 'Invalid author.', 'columnkit' ) ], 400 );
 				}
 				$update['post_author'] = $author_id;

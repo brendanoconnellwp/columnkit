@@ -249,7 +249,7 @@ final class DataExporter {
 		foreach ( $columns as $entry ) {
 			$headers[] = (string) ( $entry['label'] ?? '' );
 		}
-		fputcsv( $out, array_map( [ self::class, 'csv_escape' ], $headers ) );
+		fputcsv( $out, array_map( [ self::class, 'csv_escape' ], $headers ), ',', '"', '' );
 
 		foreach ( $posts as $post ) {
 			if ( ! $post instanceof \WP_Post ) {
@@ -266,7 +266,7 @@ final class DataExporter {
 				$format   = is_array( $entry['format'] ?? null ) ? $entry['format'] : [];
 				$row[]    = ColumnPresenter::format_export( $col->get_export_value( $post->ID, $settings ), $format );
 			}
-			fputcsv( $out, array_map( [ self::class, 'csv_escape' ], $row ) );
+			fputcsv( $out, array_map( [ self::class, 'csv_escape' ], $row ), ',', '"', '' );
 		}
 		fclose( $out );
 	}
