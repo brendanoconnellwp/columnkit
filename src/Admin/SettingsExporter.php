@@ -177,6 +177,12 @@ final class SettingsExporter {
 					// Layout (column order + built-in column overrides) is whitelisted by save_set().
 					$layout = is_array( $set['layout'] ?? null ) ? $set['layout'] : [];
 					$this->repository->save_set( $screen_key, $set_id, $label, $clean, $layout );
+					// Carry role restrictions across — dropping them would make a restricted view
+					// (and its columns' exports) visible to every role on the target site.
+					if ( isset( $set['roles'] ) && is_array( $set['roles'] ) ) {
+						$roles = array_values( array_filter( $set['roles'], 'is_string' ) );
+						$this->repository->set_roles( $screen_key, $set_id, $roles );
+					}
 				}
 				$imported++;
 			} elseif ( isset( $screen_data['columns'] ) && is_array( $screen_data['columns'] ) ) {

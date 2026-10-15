@@ -244,6 +244,11 @@ final class CoreFields {
 		}
 
 		if ( $field === 'email' ) {
+			// Your own address changes through Profile, where core makes you confirm the new
+			// address first. A direct write here would let a hijacked session take the account.
+			if ( $user_id === get_current_user_id() ) {
+				return new \WP_Error( 'ck_self_email', __( 'Change your own email address from your Profile page.', 'columnkit' ) );
+			}
 			$email = sanitize_email( $value );
 			if ( $email === '' || ! is_email( $email ) ) {
 				return new \WP_Error( 'ck_bad_email', __( 'Please enter a valid email address.', 'columnkit' ) );

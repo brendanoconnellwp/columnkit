@@ -88,6 +88,17 @@ final class PostStatusColumn extends AbstractPostFieldColumn implements Sortable
 				return; // Contributors can't publish — same rule as core.
 			}
 		}
+		if ( $post->post_status === 'trash' ) {
+			// Restoring from Trash is core's untrash action: it needs delete_post, not just
+			// edit_post, and must go through wp_untrash_post() so its hooks and meta cleanup run.
+			if ( ! current_user_can( 'delete_post', $post_id ) || ! wp_untrash_post( $post_id ) ) {
+				return;
+			}
+			$post = self::post( $post_id );
+			if ( ! $post || $raw_value === $post->post_status ) {
+				return;
+			}
+		}
 		$fields = [ 'post_status' => $raw_value ];
 		// A post scheduled in the future that's "published" now goes live now, as core does.
 		if ( $raw_value === 'publish' && $post->post_status === 'future' ) {

@@ -11,6 +11,7 @@ use ColumnKit\Columns\FilterableColumn;
 use ColumnKit\Columns\SortableColumn;
 use ColumnKit\Support\ObjectContext;
 use ColumnKit\Support\ScreenIdentifier;
+use WP_Post;
 use WP_Query;
 use WP_Term;
 
@@ -273,7 +274,7 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 
 			case 'relationship':
 			case 'post_object':
-				return $this->render_post_titles( (array) $value, 5 );
+				return $this->render_post_titles( self::as_list( $value ), 5 );
 
 			case 'select':
 			case 'radio':
@@ -317,15 +318,7 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 				return esc_html( implode( ', ', $names ) );
 
 			case 'user':
-				$names = [];
-				foreach ( (array) $value as $u ) {
-					$id = is_array( $u ) ? (int) ( $u['ID'] ?? 0 ) : (int) $u;
-					$user = $id > 0 ? get_userdata( $id ) : false;
-					if ( $user ) {
-						$names[] = $user->display_name;
-					}
-				}
-				return esc_html( implode( ', ', $names ) );
+				return esc_html( implode( ', ', self::user_names( $value ) ) );
 
 			case 'url':
 				$url = (string) $value;
@@ -345,7 +338,7 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 			case 'text':
 			default:
 				if ( is_array( $value ) || is_object( $value ) ) {
-					return esc_html( (string) wp_json_encode( $value ) );
+					return esc_html( (string) wp_json_encode( self::scrub( $value ) ) );
 				}
 				return esc_html( (string) $value );
 		}
@@ -353,36 +346,119 @@ final class ACFFieldColumn extends BaseColumn implements SortableColumn, Filtera
 
 	/** @param array<int, mixed> $items */
 	private function render_post_titles( array $items, int $cap ): string {
-		$titles = [];
-		foreach ( array_slice( $items, 0, $cap ) as $item ) {
-			if ( is_object( $item ) && isset( $item->post_title ) ) {
-				$titles[] = (string) $item->post_title;
-			} elseif ( is_numeric( $item ) ) {
-				$title = get_the_title( (int) $item );
-				if ( $title ) {
-					$titles[] = $title;
-				}
-			}
-		}
-		$out = implode( ', ', array_map( 'esc_html', $titles ) );
+		$titles = self::post_titles( array_slice( $items, 0, $cap ) );
+		$out    = implode( ', ', array_map( 'esc_html', $titles ) );
 		if ( count( $items ) > $cap ) {
 			$out .= ' &hellip;';
 		}
 		return $out;
 	}
 
+	/**
+	 * ACF returns one item (WP_Post / WP_User / ID / user array) or a list of them depending
+	 * on "multiple". Never `(array)` a single object — that casts it to its property list.
+	 *
+	 * @param mixed $value
+	 * @return array<int, mixed>
+	 */
+	private static function as_list( $value ): array {
+		if ( is_object( $value ) || ( is_array( $value ) && isset( $value['ID'] ) ) ) {
+			return [ $value ];
+		}
+		return is_array( $value ) ? array_values( $value ) : [ $value ];
+	}
+
+	/**
+	 * Titles of related posts the current user can read. Related IDs are chosen by whoever
+	 * edits the object, so they can point at someone else's private or draft post.
+	 *
+	 * @param array<int, mixed> $items
+	 * @return string[]
+	 */
+	private static function post_titles( array $items ): array {
+		$titles = [];
+		foreach ( $items as $item ) {
+			$id = $item instanceof WP_Post ? (int) $item->ID : ( is_numeric( $item ) ? (int) $item : 0 );
+			if ( $id > 0 && current_user_can( 'read_post', $id ) ) {
+				$title = get_the_title( $id );
+				if ( $title !== '' ) {
+					$titles[] = $title;
+				}
+			}
+		}
+		return $titles;
+	}
+
+	/**
+	 * @param mixed $value
+	 * @return string[]
+	 */
+	private static function user_names( $value ): array {
+		$names = [];
+		foreach ( self::as_list( $value ) as $u ) {
+			if ( $u instanceof \WP_User ) {
+				$id = (int) $u->ID;
+			} else {
+				$id = is_array( $u ) ? (int) ( $u['ID'] ?? 0 ) : (int) $u;
+			}
+			$user = $id > 0 ? get_userdata( $id ) : false;
+			if ( $user ) {
+				$names[] = (string) $user->display_name;
+			}
+		}
+		return $names;
+	}
+
+	/**
+	 * Make a formatted ACF value safe to JSON-encode: WP_Post / WP_User / WP_Term objects become
+	 * their title / display name / name (a raw encode dumps post_content, post_password,
+	 * user_pass hashes and emails), and any other object is dropped.
+	 *
+	 * @param mixed $value
+	 * @return mixed
+	 */
+	private static function scrub( $value ) {
+		if ( $value instanceof WP_Post ) {
+			return current_user_can( 'read_post', $value->ID ) ? get_the_title( $value ) : null;
+		}
+		if ( $value instanceof \WP_User ) {
+			return (string) $value->display_name;
+		}
+		if ( $value instanceof WP_Term ) {
+			return (string) $value->name;
+		}
+		if ( is_object( $value ) ) {
+			return null;
+		}
+		if ( is_array( $value ) ) {
+			if ( isset( $value['user_email'] ) || isset( $value['user_pass'] ) ) {
+				// ACF "user array" return format.
+				return (string) ( $value['display_name'] ?? '' );
+			}
+			return array_map( [ self::class, 'scrub' ], $value );
+		}
+		return $value;
+	}
+
 	public function get_export_value( int $object_id, array $settings ): string {
 		$field_name = (string) ( $settings['field_name'] ?? '' );
-		if ( $field_name === '' || ! function_exists( 'get_field' ) ) {
+		if ( $field_name === '' || ! function_exists( 'get_field_object' ) ) {
 			return '';
 		}
-		$value = get_field( $field_name, self::acf_id( $object_id, $settings ) );
+		$field = get_field_object( $field_name, self::acf_id( $object_id, $settings ) );
+		$value = is_array( $field ) ? ( $field['value'] ?? null ) : null;
 		if ( $value === null || $value === '' || $value === false ) {
 			return '';
 		}
+		switch ( (string) ( $field['type'] ?? '' ) ) {
+			case 'relationship':
+			case 'post_object':
+				return implode( ', ', self::post_titles( self::as_list( $value ) ) );
+			case 'user':
+				return implode( ', ', self::user_names( $value ) );
+		}
 		if ( is_array( $value ) || is_object( $value ) ) {
-			// For complex types just JSON-encode for the export.
-			return (string) wp_json_encode( $value );
+			return (string) wp_json_encode( self::scrub( $value ) );
 		}
 		return (string) $value;
 	}

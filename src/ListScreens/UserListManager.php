@@ -195,13 +195,13 @@ final class UserListManager {
 		foreach ( $columns as $entry ) {
 			$headers[] = (string) ( $entry['label'] ?? '' );
 		}
-		fputcsv( $out, array_map( [ DataExporter::class, 'csv_escape' ], $headers ) );
+		fputcsv( $out, array_map( [ DataExporter::class, 'csv_escape' ], $headers ), ',', '"', '' );
 		foreach ( $ids as $id ) {
 			$row = [ (string) $id ];
 			foreach ( $columns as $entry ) {
 				$row[] = $this->cell_value( (int) $id, $entry );
 			}
-			fputcsv( $out, array_map( [ DataExporter::class, 'csv_escape' ], $row ) );
+			fputcsv( $out, array_map( [ DataExporter::class, 'csv_escape' ], $row ), ',', '"', '' );
 		}
 		fclose( $out );
 	}

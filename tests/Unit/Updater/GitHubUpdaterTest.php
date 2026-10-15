@@ -91,6 +91,34 @@ final class GitHubUpdaterTest extends TestCase {
 		$this->assertStringContainsString( 'releases/download', $update['package'] );
 	}
 
+	/** @param array<int, array<string, mixed>> $assets */
+	private function release_with_assets( string $tag, array $assets ): array {
+		return [ 'code' => 200, 'body' => (string) json_encode( [ 'tag_name' => $tag, 'assets' => $assets ] ) ];
+	}
+
+	public function test_no_fallback_to_a_differently_named_zip(): void {
+		// A hand-uploaded zip that isn't the CI-built columnkit-{version}.zip is never offered.
+		$this->next_response = $this->release_with_assets( 'v0.8.0', [
+			[ 'id' => 1, 'name' => 'columnkit.zip', 'browser_download_url' => 'https://github.com/brendanoconnellwp/columnkit/releases/download/v0.8.0/columnkit.zip' ],
+		] );
+		$this->assertFalse( ( new GitHubUpdater( '' ) )->check_update( false, [ 'Version' => '0.7.0' ], CK_BASENAME ) );
+	}
+
+	public function test_download_url_must_be_this_repos_release_download(): void {
+		$this->next_response = $this->release_with_assets( 'v0.8.0', [
+			[ 'id' => 1, 'name' => 'columnkit-0.8.0.zip', 'browser_download_url' => 'https://evil.example/columnkit-0.8.0.zip' ],
+		] );
+		$this->assertFalse( ( new GitHubUpdater( '' ) )->check_update( false, [ 'Version' => '0.7.0' ], CK_BASENAME ) );
+	}
+
+	public function test_non_semver_tags_are_ignored(): void {
+		foreach ( [ 'v99', 'latest', 'v1.0.0-beta', '1.0.0' ] as $tag ) {
+			$this->transients    = [];
+			$this->next_response = $this->release_with_assets( $tag, [] );
+			$this->assertFalse( ( new GitHubUpdater( '' ) )->check_update( false, [ 'Version' => '0.7.0' ], CK_BASENAME ), $tag );
+		}
+	}
+
 	public function test_offers_asset_api_url_when_token_set(): void {
 		$this->next_response = $this->release_response( 'v0.6.0' );
 		$updater = new GitHubUpdater( 'ghp_test_token' );

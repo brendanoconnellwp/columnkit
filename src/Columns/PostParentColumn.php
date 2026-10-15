@@ -75,6 +75,9 @@ final class PostParentColumn extends AbstractPostFieldColumn implements Sortable
 			return count( get_post_ancestors( $p ) );
 		};
 		foreach ( is_array( $pages ) ? $pages : [] as $p ) {
+			if ( ! current_user_can( 'read_post', $p->ID ) ) {
+				continue; // Don't leak titles of other users' private/draft items.
+			}
 			$out[ (string) $p->ID ] = str_repeat( '— ', $depth( $p ) ) . ( $p->post_title !== '' ? $p->post_title : __( '(no title)', 'columnkit' ) );
 		}
 		return $cache[ $post_type ] = $out;
@@ -93,7 +96,10 @@ final class PostParentColumn extends AbstractPostFieldColumn implements Sortable
 		if ( $parent > 0 ) {
 			$candidate = self::post( $parent );
 			// Same post type, not itself, and not one of its own descendants (no cycles).
+			// Must also be readable by this user — otherwise saving then re-rendering would reveal
+			// the title of a private/draft item they can't see.
 			if ( ! $candidate || $candidate->post_type !== $post->post_type || $parent === $post_id
+				|| ! current_user_can( 'read_post', $parent )
 				|| in_array( $post_id, get_post_ancestors( $candidate ), true ) ) {
 				return;
 			}
