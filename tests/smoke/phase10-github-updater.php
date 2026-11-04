@@ -27,6 +27,17 @@ delete_transient( 'ck_github_update' );
 // -----------------------------------------------------------------------------
 $data = get_plugin_data( WP_PLUGIN_DIR . '/columnkit/columnkit.php', false, false );
 check( 'Update URI header present', ( $data['UpdateURI'] ?? '' ) === 'https://github.com/brendanoconnellwp/columnkit' );
+if ( GitHubUpdater::is_dev_checkout( CK_DIR ) ) {
+	// A dev site linking the repo in: boot() must NOT have hooked the updater (an update would
+	// unzip a release over the checkout). Hook a test instance so the rest still runs.
+	$hooked = false;
+	foreach ( (array) ( $GLOBALS['wp_filter']['update_plugins_github.com']->callbacks[10] ?? [] ) as $cb ) {
+		$hooked = $hooked || ( is_array( $cb['function'] ) && $cb['function'][0] instanceof GitHubUpdater );
+	}
+	check( 'git checkout: boot() left the updater unhooked', ! $hooked );
+	( new GitHubUpdater() )->register_hooks();
+	echo "(git checkout: testing a manually hooked updater)\n";
+}
 check( 'update_plugins_github.com filter registered', has_filter( 'update_plugins_github.com' ) !== false );
 
 // -----------------------------------------------------------------------------
