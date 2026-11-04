@@ -71,6 +71,7 @@ final class PostFieldColumnsTest extends TestCase {
 		$other = self::post( [ 'ID' => 12, 'post_parent' => 0, 'post_type' => 'post' ] );
 		Functions\when( 'get_post' )->alias( static fn( $id ) => [ 10 => $page, 11 => $child, 12 => $other ][ $id ] ?? null );
 		Functions\when( 'get_post_ancestors' )->alias( static fn( $p ) => $p->ID === 11 ? [ 10 ] : [] );
+		Functions\when( 'current_user_can' )->justReturn( true );
 		Functions\expect( 'wp_update_post' )->never();
 
 		$col = new PostParentColumn();
@@ -85,8 +86,44 @@ final class PostFieldColumnsTest extends TestCase {
 		$other = self::post( [ 'ID' => 13, 'post_parent' => 0, 'post_type' => 'page' ] );
 		Functions\when( 'get_post' )->alias( static fn( $id ) => [ 10 => $page, 13 => $other ][ $id ] ?? null );
 		Functions\when( 'get_post_ancestors' )->justReturn( [] );
+		Functions\when( 'current_user_can' )->justReturn( true );
 		Functions\expect( 'wp_update_post' )->once()->with( [ 'ID' => 10, 'post_parent' => 13 ], true )->andReturn( 10 );
 		( new PostParentColumn() )->save_value( 10, '13', [] );
+		$this->addToAssertionCount( \Mockery::getContainer()->mockery_getExpectationCount() );
+	}
+
+	public function test_parent_refuses_unreadable_parent(): void {
+		$page    = self::post( [ 'ID' => 10, 'post_parent' => 0, 'post_type' => 'page' ] );
+		$private = self::post( [ 'ID' => 14, 'post_parent' => 0, 'post_type' => 'page' ] );
+		Functions\when( 'get_post' )->alias( static fn( $id ) => [ 10 => $page, 14 => $private ][ $id ] ?? null );
+		Functions\when( 'get_post_ancestors' )->justReturn( [] );
+		Functions\when( 'current_user_can' )->alias( static fn( $cap, $id = 0 ) => ! ( $cap === 'read_post' && $id === 14 ) );
+		Functions\expect( 'wp_update_post' )->never();
+		( new PostParentColumn() )->save_value( 10, '14', [] );
+		$this->addToAssertionCount( \Mockery::getContainer()->mockery_getExpectationCount() );
+	}
+
+	public function test_status_restore_from_trash_requires_delete_post(): void {
+		Functions\when( 'get_post' )->justReturn( self::post( [ 'ID' => 5, 'post_status' => 'trash', 'post_type' => 'post' ] ) );
+		Functions\when( 'current_user_can' )->alias( static fn( $cap ) => $cap !== 'delete_post' );
+		Functions\expect( 'wp_untrash_post' )->never();
+		Functions\expect( 'wp_update_post' )->never();
+		( new PostStatusColumn() )->save_value( 5, 'draft', [] );
+		$this->addToAssertionCount( \Mockery::getContainer()->mockery_getExpectationCount() );
+	}
+
+	public function test_status_restore_from_trash_goes_through_untrash(): void {
+		$trashed  = self::post( [ 'ID' => 5, 'post_status' => 'trash', 'post_type' => 'post' ] );
+		$restored = self::post( [ 'ID' => 5, 'post_status' => 'draft', 'post_type' => 'post' ] );
+		$state    = (object) [ 'post' => $trashed ];
+		Functions\when( 'get_post' )->alias( static fn() => $state->post );
+		Functions\when( 'current_user_can' )->justReturn( true );
+		Functions\expect( 'wp_untrash_post' )->once()->with( 5 )->andReturnUsing( static function () use ( $state, $restored ) {
+			$state->post = $restored;
+			return $restored;
+		} );
+		Functions\expect( 'wp_update_post' )->once()->with( [ 'ID' => 5, 'post_status' => 'pending' ], true )->andReturn( 5 );
+		( new PostStatusColumn() )->save_value( 5, 'pending', [] );
 		$this->addToAssertionCount( \Mockery::getContainer()->mockery_getExpectationCount() );
 	}
 

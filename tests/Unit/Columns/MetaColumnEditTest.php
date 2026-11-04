@@ -28,6 +28,9 @@ final class MetaColumnEditTest extends TestCase {
 			'__'       => static fn( $s ) => $s,
 			'esc_html' => static fn( $s ) => $s,
 		] );
+		// Default: plain keys are writable; tests that care override current_user_can.
+		Functions\when( 'is_protected_meta' )->alias( static fn( $key ) => str_starts_with( (string) $key, '_' ) );
+		Functions\when( 'current_user_can' )->justReturn( false );
 		foreach ( [ 'update_user_meta', 'delete_user_meta', 'update_term_meta', 'delete_term_meta' ] as $fn ) {
 			Functions\when( $fn )->alias( function ( ...$args ) use ( $fn ) {
 				$this->calls[] = [ 'fn' => $fn, 'args' => $args ];
@@ -62,6 +65,23 @@ final class MetaColumnEditTest extends TestCase {
 	public function test_user_meta_save_noop_without_key(): void {
 		$col = new UserMetaColumn();
 		$col->save_value( 7, 'x', [] );
+		$this->assertSame( [], $this->calls );
+	}
+
+	public function test_user_meta_save_refuses_protected_key_without_edit_users(): void {
+		( new UserMetaColumn() )->save_value( 7, '1', [ 'meta_key' => '_pending_approval' ] );
+		$this->assertSame( [], $this->calls );
+	}
+
+	public function test_user_meta_save_allows_protected_key_with_edit_users(): void {
+		Functions\when( 'current_user_can' )->alias( static fn( $cap ) => $cap === 'edit_users' );
+		( new UserMetaColumn() )->save_value( 7, '1', [ 'meta_key' => '_pending_approval' ] );
+		$this->assertSame( 'update_user_meta', $this->calls[0]['fn'] ?? null );
+	}
+
+	public function test_term_meta_save_refuses_protected_key_without_manage_terms(): void {
+		Functions\when( 'get_term' )->justReturn( null );
+		( new TermMetaColumn() )->save_value( 3, 'x', [ 'meta_key' => '_internal' ] );
 		$this->assertSame( [], $this->calls );
 	}
 

@@ -59,3 +59,30 @@ if ( ! class_exists( 'WP_Post' ) ) {
 		public string $post_author = '';
 	}
 }
+if ( ! class_exists( 'WP_User' ) ) {
+	#[\AllowDynamicProperties]
+	class WP_User {
+		public int $ID = 0;
+		public string $display_name = '';
+		public string $user_email = '';
+	}
+}
+if ( ! class_exists( 'WP_Term' ) ) {
+	#[\AllowDynamicProperties]
+	class WP_Term {
+		public int $term_id = 0;
+		public string $name = '';
+		public string $taxonomy = '';
+	}
+}
+if ( ! class_exists( 'WP_Error' ) ) {
+	class WP_Error {
+		public function __construct( private string $code = '', private string $message = '' ) {}
+		public function get_error_code(): string {
+			return $this->code;
+		}
+		public function get_error_message(): string {
+			return $this->message;
+		}
+	}
+}

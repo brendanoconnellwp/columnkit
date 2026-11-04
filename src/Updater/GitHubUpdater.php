@@ -114,9 +114,11 @@ final class GitHubUpdater {
 	/**
 	 * Choose the download URL for the release zip.
 	 *
-	 * Prefers the asset named columnkit-{version}.zip; falls back to the first .zip
-	 * asset. With a token (private repo) the asset API URL is used — the browser URL
-	 * is not accessible for private repos.
+	 * Only the asset named exactly columnkit-{version}.zip (what the release workflow
+	 * builds) is accepted — no "first .zip" fallback, so a hand-uploaded zip can't
+	 * sidestep CI. With a token (private repo) the asset API URL is used — the browser
+	 * URL is not accessible for private repos. Otherwise the browser URL must point at
+	 * this repo's own release downloads.
 	 *
 	 * @param array<string, mixed> $release
 	 */
@@ -124,16 +126,9 @@ final class GitHubUpdater {
 		$assets = isset( $release['assets'] ) && is_array( $release['assets'] ) ? $release['assets'] : [];
 		$chosen = null;
 		foreach ( $assets as $asset ) {
-			if ( ! is_array( $asset ) ) {
-				continue;
-			}
-			$name = (string) ( $asset['name'] ?? '' );
-			if ( $name === 'columnkit-' . $version . '.zip' ) {
+			if ( is_array( $asset ) && (string) ( $asset['name'] ?? '' ) === 'columnkit-' . $version . '.zip' ) {
 				$chosen = $asset;
 				break;
-			}
-			if ( $chosen === null && str_ends_with( $name, '.zip' ) ) {
-				$chosen = $asset;
 			}
 		}
 		if ( $chosen === null ) {
@@ -143,7 +138,8 @@ final class GitHubUpdater {
 			$id = isset( $chosen['id'] ) && is_scalar( $chosen['id'] ) ? (string) (int) $chosen['id'] : '';
 			return $id !== '' ? sprintf( self::ASSET_API, self::REPO ) . $id : '';
 		}
-		return (string) ( $chosen['browser_download_url'] ?? '' );
+		$url = (string) ( $chosen['browser_download_url'] ?? '' );
+		return str_starts_with( $url, 'https://github.com/' . self::REPO . '/releases/download/' ) ? $url : '';
 	}
 
 	/**
@@ -178,7 +174,9 @@ final class GitHubUpdater {
 		}
 
 		$body = json_decode( (string) wp_remote_retrieve_body( $response ), true );
-		if ( ! is_array( $body ) || ! isset( $body['tag_name'] ) ) {
+		// Only plain vX.Y.Z tags are releases; anything else is ignored rather than offered.
+		if ( ! is_array( $body ) || ! is_string( $body['tag_name'] ?? null )
+			|| ! preg_match( '/^v\d+\.\d+\.\d+$/', $body['tag_name'] ) ) {
 			set_transient( self::TRANSIENT, [ 'ck_error' => true ], self::CACHE_FAIL_TTL );
 			return null;
 		}

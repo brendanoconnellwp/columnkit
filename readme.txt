@@ -4,7 +4,7 @@ Tags: admin columns, custom fields, list table
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.7.0
+Stable tag: 0.7.1
 License: GPLv2 or later
 
 Customise WordPress admin list tables: add, remove, reorder columns; filter, sort, inline-edit, bulk-edit, and export them.
@@ -14,6 +14,20 @@ Customise WordPress admin list tables: add, remove, reorder columns; filter, sor
 Personal plugin for replacing paid SaaS column-management plugins. v0.1 ships Phase 1 (custom columns + admin UI on Posts and Pages). Later phases add sorting/filtering, inline & bulk edit, export, and integrations with ACF, WooCommerce, and Yoast.
 
 == Changelog ==
+
+= 0.7.1 =
+Security release. Recommended for every site where people other than administrators log in.
+* Security: inline edits on the Users screen now require the Users screen's own permission (list_users), and editing fields on your own account requires edit_users. Before, a Contributor could write custom-field columns configured on the Users screen onto their own account. User and term meta columns also refuse protected (underscore) keys without elevated permission.
+* Security: you can no longer change your own email address from the Users list — use your Profile, where WordPress asks you to confirm the new address.
+* Security: exporting an ACF relationship, post object or user field now exports titles / names only. Before, it could include the full related post (content, password) or user record (including the password hash). Related titles in the list and export are limited to posts you can read.
+* Security: restoring a post from Trash through the Status column now needs delete permission (as in core) and runs WordPress's normal untrash process.
+* Security: the Parent picker only lists, and only accepts, items you can read — it no longer reveals titles of other users' private or draft pages.
+* Security: term inline edits are tied to the term's real taxonomy; new authors are checked against the post type's own capability (and site membership on multisite).
+* Security: importing settings now keeps each view's role restriction instead of making restricted views visible to everyone.
+* Security: updates only install the release file built by the release workflow (columnkit-X.Y.Z.zip) from this repository's own downloads, and only for plain vX.Y.Z tags.
+* Fixed: Bulk Edit values for ColumnKit columns were never saved.
+* Fixed: an ACF single post-object field could show unrelated post titles.
+* Fixed: CSV exports could contain PHP 8.4 deprecation notices.
 
 = 0.7.0 =
 * Added: manage WordPress's own columns — the column editor now lists the built-in columns (Title, Author, Date, Categories, columns added by other plugins…) alongside your custom ones. Rename, hide, resize and drag them into any order; columns from plugins activated later are appended automatically, never lost.

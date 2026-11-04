@@ -138,4 +138,51 @@ final class ACFFieldColumnTest extends TestCase {
 		Functions\expect( 'update_post_meta' )->never();
 		$this->col->save_value( 9, 'whatever', [ 'field_name' => 'hero' ] );
 	}
+
+	// --- Export must never dump whole WP objects (security backlog R-1) -------------
+
+	private static function post( int $id, string $title ): \WP_Post {
+		$p                = new \WP_Post();
+		$p->ID            = $id;
+		$p->post_title    = $title;
+		$p->post_content  = 'SECRET CONTENT';
+		$p->post_password = 'hunter2';
+		return $p;
+	}
+
+	private function export_with( string $type, $value ): string {
+		Functions\when( 'get_field_object' )->justReturn( [ 'type' => $type, 'value' => $value ] );
+		Functions\when( 'get_the_title' )->alias( static fn( $p ) => is_object( $p ) ? $p->post_title : [ 3 => 'Public', 4 => 'Private' ][ $p ] );
+		// Post 4 is someone else's private post.
+		Functions\when( 'current_user_can' )->alias( static fn( $cap, $id = 0 ) => ! ( $cap === 'read_post' && (int) $id === 4 ) );
+		Functions\when( 'wp_json_encode' )->alias( static fn( $v ) => json_encode( $v ) );
+		return $this->col->get_export_value( 1, [ 'field_name' => 'rel' ] );
+	}
+
+	public function test_export_relationship_is_readable_titles_only(): void {
+		$out = $this->export_with( 'relationship', [ self::post( 3, 'Public' ), self::post( 4, 'Private' ) ] );
+		$this->assertSame( 'Public', $out );
+	}
+
+	public function test_export_single_post_object_is_not_cast_to_its_properties(): void {
+		$this->assertSame( 'Public', $this->export_with( 'post_object', self::post( 3, 'Public' ) ) );
+	}
+
+	public function test_export_user_object_never_includes_hash_or_email(): void {
+		$u               = new \WP_User();
+		$u->ID           = 2;
+		$u->display_name = 'Admin';
+		$u->user_email   = 'admin@example.com';
+		$u->data         = (object) [ 'user_pass' => '$P$hash' ];
+		Functions\when( 'get_userdata' )->justReturn( $u );
+		$out = $this->export_with( 'user', $u );
+		$this->assertSame( 'Admin', $out );
+	}
+
+	public function test_export_nested_objects_in_other_types_are_scrubbed(): void {
+		$out = $this->export_with( 'group', [ 'linked' => self::post( 4, 'Private' ), 'note' => 'hi' ] );
+		$this->assertStringNotContainsString( 'SECRET', $out );
+		$this->assertStringNotContainsString( 'hunter2', $out );
+		$this->assertSame( '{"linked":null,"note":"hi"}', $out );
+	}
 }
