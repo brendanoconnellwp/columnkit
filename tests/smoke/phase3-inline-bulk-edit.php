@@ -223,6 +223,8 @@ $_POST = [
 	'ck_bulk'        => [ 'price' => '555', 'tag' => 'after' ],
 	'ck_bulk_apply'  => [ 'price' => '1' ],
 ];
+// Core's Bulk Edit submits by GET and the handler reads $_REQUEST (0.7.1 fix) — mirror that.
+$_REQUEST = $_POST;
 do_action( 'save_post', $post_a, get_post( $post_a ), true );
 do_action( 'save_post', $post_b, get_post( $post_b ), true );
 check( 'bulk: ticked column updates A', get_post_meta( $post_a, '_ck_price', true ) === '555' );
@@ -237,6 +239,7 @@ $_POST = [
 	'ck_bulk'       => [ 'price' => '111' ],
 	'ck_bulk_apply' => [ 'price' => '1' ],
 ];
+$_REQUEST = $_POST;
 do_action( 'save_post', $post_a, get_post( $post_a ), true );
 check( 'bulk: invalid nonce blocks save', get_post_meta( $post_a, '_ck_price', true ) === '10' );
 

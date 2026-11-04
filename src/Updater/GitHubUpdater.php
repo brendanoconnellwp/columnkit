@@ -50,6 +50,15 @@ final class GitHubUpdater {
 		$this->token = $token ?? ( defined( 'CK_GITHUB_TOKEN' ) && is_string( CK_GITHUB_TOKEN ) ? CK_GITHUB_TOKEN : '' );
 	}
 
+	/**
+	 * True when the plugin folder is a git working copy (a dev site linking the repo in).
+	 * Self-updating there would make WordPress delete the folder and unzip a release over it —
+	 * wiping the checkout, uncommitted work and .git included. Plugin::boot() skips the updater.
+	 */
+	public static function is_dev_checkout( string $plugin_dir ): bool {
+		return $plugin_dir !== '' && file_exists( rtrim( $plugin_dir, '/\\' ) . DIRECTORY_SEPARATOR . '.git' );
+	}
+
 	public function register_hooks(): void {
 		// Registered unconditionally — update checks run from wp-cron and wp-admin both.
 		add_filter( 'update_plugins_' . self::HOSTNAME, [ $this, 'check_update' ], 10, 3 );
