@@ -4,7 +4,7 @@ Tags: admin columns, custom fields, list table
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 0.7.1
+Stable tag: 0.8.0
 License: GPLv2 or later
 
 Customise WordPress admin list tables: add, remove, reorder columns; filter, sort, inline-edit, bulk-edit, and export them.
@@ -14,6 +14,13 @@ Customise WordPress admin list tables: add, remove, reorder columns; filter, sor
 Personal plugin for replacing paid SaaS column-management plugins. v0.1 ships Phase 1 (custom columns + admin UI on Posts and Pages). Later phases add sorting/filtering, inline & bulk edit, export, and integrations with ACF, WooCommerce, and Yoast.
 
 == Changelog ==
+
+= 0.8.0 =
+Adds a public API for companion plugins (BoardKit). No change to how the list tables behave.
+* New: `ColumnKit\Api` (version 1) — read a screen's views and columns, render a value, read lane choices and raw values, and save a value with exactly the inline editor's permission checks. Views limited to certain roles stay hidden from other users through the API too.
+* New: the `columnkit/loaded` action fires once ColumnKit has booted, with the API version.
+* Changed: the inline editor's save checks for posts now live in one place that both the list table and the API use, so the two can't drift apart.
+* Fixed: a site running ColumnKit from a git checkout (a development site) no longer offers ColumnKit updates, which would have replaced the checkout with the release zip.
 
 = 0.7.1 =
 Security release. Recommended for every site where people other than administrators log in.

@@ -86,8 +86,10 @@ final class Plugin {
 		$this->term_list_manager->register_hooks();
 
 		// Self-updates from GitHub releases. Not is_admin()-gated: wp_update_plugins()
-		// runs from wp-cron too, and the filter must be present there.
-		( new GitHubUpdater() )->register_hooks();
+		// runs from wp-cron too, and the filter must be present there. Never on a git checkout.
+		if ( ! GitHubUpdater::is_dev_checkout( CK_DIR ) ) {
+			( new GitHubUpdater() )->register_hooks();
+		}
 
 		// Meta-key suggestions for the settings page (AJAX registers at boot — admin-ajax.php
 		// has its own lifecycle).
@@ -97,6 +99,10 @@ final class Plugin {
 			$this->settings_page->register_hooks();
 			$this->assets->register_hooks();
 		}
+
+		// Last, once everything above is registered: companion plugins (BoardKit) enable their
+		// ColumnKit integration from this, never from class_exists() at file load.
+		do_action( 'columnkit/loaded', Api::VERSION );
 	}
 
 	public function registry(): ColumnRegistry {

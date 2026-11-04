@@ -7,6 +7,7 @@ use ColumnKit\ColumnRegistry;
 use ColumnKit\Columns\EditableColumn;
 use ColumnKit\Settings\SettingsRepository;
 use ColumnKit\Support\Editability;
+use ColumnKit\Support\InlineSaver;
 use ColumnKit\Support\ScreenIdentifier;
 use WP_Post;
 
@@ -105,64 +106,39 @@ final class EditManager {
 		$post_id = isset( $_POST['post_id'] ) && is_scalar( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0;
 		$col_id  = isset( $_POST['col_id'] ) && is_string( $_POST['col_id'] ) ? sanitize_key( wp_unslash( $_POST['col_id'] ) ) : '';
 		$set_id  = isset( $_POST['set'] ) && is_string( $_POST['set'] ) ? SettingsRepository::sanitize_set_id( wp_unslash( $_POST['set'] ) ) : SettingsRepository::DEFAULT_SET;
-		$value   = isset( $_POST['value'] ) && is_scalar( $_POST['value'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['value'] ) ) : '';
+		// Unsanitised (slashes removed): InlineSaver sanitises by the column's input type.
+		$raw_in  = isset( $_POST['value'] ) && is_scalar( $_POST['value'] ) ? wp_unslash( (string) $_POST['value'] ) : '';
 
-		if ( $post_id <= 0 || $col_id === '' ) {
-			wp_send_json_error( [ 'message' => __( 'Invalid request.', 'columnkit' ) ], 400 );
-		}
-		if ( ! current_user_can( 'edit_post', $post_id ) ) {
-			wp_send_json_error( [ 'message' => __( 'You cannot edit this post.', 'columnkit' ) ], 403 );
-		}
-
-		$post = get_post( $post_id );
-		if ( ! $post instanceof WP_Post ) {
-			wp_send_json_error( [ 'message' => __( 'Post not found.', 'columnkit' ) ], 404 );
+		// Request-shape, edit_post and existence checks live in InlineSaver — shared with Api::save().
+		$saver = new InlineSaver( $this->registry, $this->repository );
+		$post  = $saver->authorise_post( $post_id, $col_id );
+		if ( $post instanceof \WP_Error ) {
+			self::send_error( $post );
 		}
 
 		// Core fields (Title, Date, Author) branch — col_id like "core_title".
 		if ( str_starts_with( $col_id, self::CORE_PREFIX ) ) {
-			$this->save_core_field( $post, substr( $col_id, strlen( self::CORE_PREFIX ) ), $value );
+			$this->save_core_field( $post, substr( $col_id, strlen( self::CORE_PREFIX ) ), sanitize_text_field( $raw_in ) );
 			return; // save_core_field always wp_send_json_*'s.
 		}
 
-		$screen_key = 'post_type:' . $post->post_type;
-		$set_id     = \ColumnKit\Support\SetResolver::allowed( $this->repository, $screen_key, $set_id );
-		$columns    = $this->repository->get_columns( $screen_key, $set_id );
-		$entry      = null;
-		foreach ( $columns as $candidate ) {
-			if ( ( $candidate['id'] ?? '' ) === $col_id ) {
-				$entry = $candidate;
-				break;
-			}
+		// Non-strict: a view this user can't see falls back to the default set, as the switcher does.
+		$result = $saver->save_column( $post, $set_id, $col_id, $raw_in, false );
+		if ( $result instanceof \WP_Error ) {
+			self::send_error( $result );
 		}
-		if ( $entry === null ) {
-			wp_send_json_error( [ 'message' => __( 'Column not configured.', 'columnkit' ) ], 404 );
-		}
-
-		$col      = $this->registry->get( (string) ( $entry['type'] ?? '' ) );
-		$settings = is_array( $entry['settings'] ?? null ) ? $entry['settings'] : [];
-		if ( ! $col instanceof EditableColumn || ! Editability::is_editable( $col, $settings ) ) {
-			wp_send_json_error( [ 'message' => __( 'Column is not editable.', 'columnkit' ) ], 400 );
-		}
-
-		if ( $col->get_edit_input_type( $settings ) === 'textarea' && isset( $_POST['value'] ) && is_scalar( $_POST['value'] ) ) {
-			// Multi-line fields (excerpts): sanitize_text_field() above flattened the newlines.
-			$value = sanitize_textarea_field( wp_unslash( (string) $_POST['value'] ) );
-		}
-		$col->save_value( $post_id, $value, $settings );
-
-		// Re-render the cell (the column's render() returns escaped HTML) and read back the raw value.
-		// Apply the same display formatting the list table uses so prefix/suffix/badge survive a save.
-		$format = is_array( $entry['format'] ?? null ) ? $entry['format'] : [];
-		$html   = \ColumnKit\Support\ColumnPresenter::format( $col->render( $post_id, $settings ), $format );
-		$raw    = $col->get_raw_value( $post_id, $settings );
 
 		wp_send_json_success(
 			[
-				'html' => $html,
-				'raw'  => $raw,
+				'html' => $result['html'],
+				'raw'  => $result['raw'],
 			]
 		);
+	}
+
+	/** Doesn't return outside tests: wp_send_json_error() dies. */
+	private static function send_error( \WP_Error $error ): void {
+		wp_send_json_error( [ 'message' => $error->get_error_message() ], InlineSaver::status_of( $error ) );
 	}
 
 	/**

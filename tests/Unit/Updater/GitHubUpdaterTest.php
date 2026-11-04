@@ -216,6 +216,20 @@ final class GitHubUpdaterTest extends TestCase {
 		$this->assertStringNotContainsString( 'href="javascript', $html );
 	}
 
+	public function test_dev_checkout_detection(): void {
+		$dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'ck-checkout-' . uniqid();
+		mkdir( $dir );
+		try {
+			$this->assertFalse( GitHubUpdater::is_dev_checkout( $dir ), 'release install' );
+			mkdir( $dir . DIRECTORY_SEPARATOR . '.git' );
+			$this->assertTrue( GitHubUpdater::is_dev_checkout( $dir . '/' ), 'git working copy' );
+			$this->assertFalse( GitHubUpdater::is_dev_checkout( '' ) );
+		} finally {
+			@rmdir( $dir . DIRECTORY_SEPARATOR . '.git' );
+			@rmdir( $dir );
+		}
+	}
+
 	public function test_flush_transient_clears_cache(): void {
 		$this->transients['ck_github_update'] = [ 'ck_error' => true ];
 		( new GitHubUpdater( '' ) )->flush_transient();
